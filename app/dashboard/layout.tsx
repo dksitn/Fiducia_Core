@@ -5,10 +5,6 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState, createContext, useContext } from 'react';
 import { supabase } from '@/utils/supabase';
 
-// ─────────────────────────────────────────────
-// Auth Context：讓所有子頁面都能讀取登入狀態
-// 用法：const { user, isSuperAdmin, isAuthLoading } = useAuth();
-// ─────────────────────────────────────────────
 interface AuthContextType {
   user: any;
   role: string | null;
@@ -19,29 +15,20 @@ interface AuthContextType {
 }
 
 export const AuthContext = createContext<AuthContextType>({
-  user: null,
-  role: null,
-  isSuperAdmin: false,
-  isAuthLoading: false,
-  handleGoogleLogin: async () => {},
-  handleLogout: async () => {},
+  user: null, role: null, isSuperAdmin: false, isAuthLoading: false,
+  handleGoogleLogin: async () => {}, handleLogout: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
-// ─────────────────────────────────────────────
-// Layout 主體
-// ─────────────────────────────────────────────
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   const isSuperAdmin = role === 'superadmin' || user?.email === 'e10090903@gmail.com';
 
-  // 初始化：取得 session + role
   useEffect(() => {
     let isMounted = true;
 
@@ -50,16 +37,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (isMounted) { setUser(null); setRole(null); setIsAuthLoading(false); }
         return;
       }
-      setUser(sessionUser);
+      if (isMounted) setUser(sessionUser);
       const { data } = await supabase
-        .from('sys_role_grants')
-        .select('role')
-        .eq('grantee_user_id', sessionUser.id)
-        .maybeSingle();
-      if (isMounted) {
-        setRole(data?.role ?? null);
-        setIsAuthLoading(false);
-      }
+        .from('sys_role_grants').select('role')
+        .eq('grantee_user_id', sessionUser.id).maybeSingle();
+      if (isMounted) { setRole(data?.role ?? null); setIsAuthLoading(false); }
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -77,42 +59,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setIsAuthLoading(true);
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard/admin`,
-        queryParams: { prompt: 'select_account' }
-      }
+      options: { redirectTo: `${window.location.origin}/dashboard/admin`, queryParams: { prompt: 'select_account' } }
     });
   };
 
   const handleLogout = async () => {
-    setIsAuthLoading(true);
     await supabase.auth.signOut();
-    localStorage.clear();
-    sessionStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
     window.location.href = '/dashboard';
   };
 
-  // 側邊欄 active link 樣式
   const getLinkClass = (path: string) => {
     const isActive = pathname === path || (path !== '/dashboard' && pathname.startsWith(path));
     return `block px-4 py-2.5 text-sm font-bold rounded-lg transition-colors ${
-      isActive
-        ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-        : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+      isActive ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
     }`;
   };
 
-  const displayRole = isSuperAdmin
-    ? 'System Admin'
-    : role ?? '訪客 (唯讀)';
+  const displayRole = isSuperAdmin ? 'System Admin' : role ?? '訪客 (唯讀)';
 
   return (
     <AuthContext.Provider value={{ user, role, isSuperAdmin, isAuthLoading, handleGoogleLogin, handleLogout }}>
       <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-800 overflow-hidden">
 
-        {/* ─── 左側 Sidebar ─── */}
         <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm shrink-0">
-
           {/* Logo */}
           <div className="p-6 border-b border-slate-100">
             <h1 className="text-2xl font-black tracking-tighter">
@@ -123,11 +93,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </p>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4 overflow-y-auto">
+          {/* Navigation — 順序對齊資料流 */}
+          <nav className="flex-1 p-4 overflow-y-auto space-y-6">
 
-            {/* 管理層 (Admin) */}
-            <div className="mb-6">
+            {/* 1. 管理層 */}
+            <div>
               <p className="px-4 text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2">
                 系統管理 (Admin)
               </p>
@@ -138,25 +108,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
 
-            {/* 核心治理 */}
-            <div className="mb-6">
-              <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                核心治理底座 (Core)
+            {/* 2. 治理流程 */}
+            <div>
+              <p className="px-4 text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">
+                治理流程 (Governance)
               </p>
               <div className="space-y-1">
-                <Link href="/dashboard" className={getLinkClass('/dashboard')}>總覽</Link>
-                <Link href="/dashboard/finance" className={getLinkClass('/dashboard/finance')}>財務分析</Link>
-                <Link href="/dashboard/esg" className={getLinkClass('/dashboard/esg')}>ESG / 永續</Link>
                 <Link href="/dashboard/governance" className={getLinkClass('/dashboard/governance')}>
-                  治理與放行 (核決樞紐)
+                  🔏 治理與放行
                 </Link>
                 <Link href="/dashboard/traceability" className={getLinkClass('/dashboard/traceability')}>
-                  追溯查詢
+                  🔍 追溯查詢
                 </Link>
               </div>
             </div>
 
-            {/* 產業垂直 */}
+            {/* 3. 資料總覽與業務 */}
+            <div>
+              <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                資料總覽與分析
+              </p>
+              <div className="space-y-1">
+                <Link href="/dashboard" className={getLinkClass('/dashboard')}>
+                  📊 資料品質總覽
+                </Link>
+                <Link href="/dashboard/finance" className={getLinkClass('/dashboard/finance')}>
+                  🏦 財務分析
+                </Link>
+                <Link href="/dashboard/esg" className={getLinkClass('/dashboard/esg')}>
+                  🌱 ESG / 永續
+                </Link>
+              </div>
+            </div>
+
+            {/* 4. 產業垂直 */}
             <div>
               <p className="px-4 text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">
                 產業決策視覺化 (Verticals)
@@ -175,7 +160,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </nav>
 
-          {/* 底部：登入狀態 */}
+          {/* 底部登入區 */}
           <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0">
             {isAuthLoading ? (
               <div className="flex items-center gap-2 px-1">
@@ -184,14 +169,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             ) : user ? (
               <div className="space-y-2">
-                {/* 身份資訊 */}
                 <div className="px-1">
                   <p className="text-[10px] font-black text-slate-400 truncate">{user.email}</p>
                   <p className={`text-[10px] font-black mt-0.5 ${isSuperAdmin ? 'text-rose-600' : 'text-indigo-600'}`}>
                     {displayRole}
                   </p>
                 </div>
-                {/* 登出按鈕 */}
                 <button
                   onClick={handleLogout}
                   className="w-full text-left px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -216,11 +199,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </aside>
 
-        {/* ─── 主內容區 ─── */}
         <main className="flex-1 overflow-y-auto relative bg-[#F8FAFC]">
           {children}
         </main>
-
       </div>
     </AuthContext.Provider>
   );
