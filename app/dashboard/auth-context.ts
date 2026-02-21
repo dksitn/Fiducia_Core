@@ -11,4 +11,20 @@ export const AuthContext = createContext<any>({
   handleLogout: async () => {},
 });
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  
+  // 🛡️ 絕對防禦：如果拿不到 Context (例如在 Next.js 預渲染期間)，就回傳一個安全的空殼
+  if (!context) {
+    return {
+      user: null,
+      role: null,
+      isSuperAdmin: false,
+      isAuthLoading: true, // 保持載入狀態，避免畫面提早噴錯
+      handleGoogleLogin: async () => {},
+      handleLogout: async () => {},
+    };
+  }
+  
+  return context;
+};
