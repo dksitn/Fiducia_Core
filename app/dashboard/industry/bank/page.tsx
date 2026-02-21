@@ -221,16 +221,14 @@ export default function BankingIndustryPage() {
                   period={latest?.period} value={latest?.revenue?.toLocaleString()}
                   prevPeriod={previous?.period} prevValue={previous?.revenue?.toLocaleString()}
                   growth={previous ? calcGrowth(latest.revenue, previous.revenue) : null}
-                  growthLabel={g => g.isPositive ? '↑ 營收成長' : '↓ 營收衰退'}
-                  growthColor={g => g.isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}
+                  growthLabel={(g: any) => g.isPositive ? '↑ 營收成長' : '↓ 營收衰退'}  // ✅ 加上 (g: any)
+                  growthColor={(g: any) => g.isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'} // ✅ 加上 (g: any)
                 />
                 <EWSRow
                   label="負債比率 (Debt Ratio)" sub="總負債 / 總資產"
-                  period={latestEWS?.period} value={`${latestEWS?.debtRatio}%`}
-                  prevPeriod={prevEWS?.period} prevValue={`${prevEWS?.debtRatio}%`}
-                  growth={debtRatioChange !== 'N/A' ? { text: `${debtRatioChange}%`, isPositive: parseFloat(debtRatioChange) <= 0 } : null}
-                  growthLabel={g => g.isPositive ? '↓ 結構改善' : '↑ 負債攀升'}
-                  growthColor={g => g.isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}
+                  // ...略...
+                  growthLabel={(g: any) => g.isPositive ? '↓ 結構改善' : '↑ 負債攀升'}  // ✅ 加上 (g: any)
+                  growthColor={(g: any) => g.isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'} // ✅ 加上 (g: any)
                 />
                 <EWSRow
                   label="盈餘品質 (CFO/NI)" sub="營業現金流 / 稅後淨利"
