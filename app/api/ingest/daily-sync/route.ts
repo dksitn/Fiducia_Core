@@ -1,6 +1,7 @@
 // app/api/ingest/daily-sync/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+export const runtime = 'edge';
 
 // 使用 Service Role 繞過 RLS，因為這是背景排程，不是使用者操作
 const supabaseAdmin = createClient(

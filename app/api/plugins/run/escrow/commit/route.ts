@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const runtime = 'edge';
+
 // 💡 匯入你剛寫好的密碼學工具與業務引擎
 import { canonicalize, generateSHA256 } from '@/utils/plugins/canonicalize';
 import { runFinReportVersionSeal, runEsgReportVersionSeal } from '@/utils/plugins/sealEngines';
