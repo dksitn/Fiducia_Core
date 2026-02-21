@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
+
 
 export const runtime = 'edge';
 
@@ -336,8 +336,14 @@ export async function POST(request: Request) {
     // 💡 不可篡改證據鏈封存 (Immutability Loop)
     // ==========================================
     const reportContent = JSON.stringify(auditReport);
-    const actualFingerprint = crypto.createHash('sha256').update(reportContent).digest('hex');
+    
+    // ✅ 改用 Web Crypto API (Edge Runtime 完美支援)
+    const msgUint8 = new TextEncoder().encode(reportContent);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const actualFingerprint = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 
+    
     // sys_state_versions.author_user_id 為 UUID nullable
     const { data: version, error: verError } = await supabaseAdmin
       .from('sys_state_versions')

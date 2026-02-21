@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
-import { useAuth } from '@/app/dashboard/layout';
+import { useAuth } from '@/app/dashboard/auth-context';
 
 // ── 共用公司清單（一般上市公司） ──────────────────────────
 const ALL_COMPANIES = [

@@ -7,7 +7,7 @@ import {
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
-import { useAuth } from '@/app/dashboard/layout';
+import { useAuth } from '@/app/dashboard/auth-context';
 
 const ALL_COMPANIES = [
   { value: '2330', label: '2330 台積電' },

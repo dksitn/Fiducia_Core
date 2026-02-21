@@ -6,7 +6,7 @@ import {
   ComposedChart, Line, Bar, BarChart, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Cell
 } from 'recharts';
-import { useAuth } from '@/app/dashboard/layout';
+import { useAuth } from '@/app/dashboard/auth-context';
 
 // ── 金控業專用公司清單（金融集團） ─────────────────────
 const FHC_COMPANIES = [

@@ -26,9 +26,11 @@ export function canonicalize(obj: any): string {
  * 產生 SHA-256 數位指紋 (使用 Web Crypto API 或 Node crypto)
  * 這裡使用 Node.js 原生的 crypto，因為我們在 Next.js 後端 (Route Handler) 執行
  */
-import crypto from 'crypto';
 
 export async function generateSHA256(dataString: string): Promise<string> {
-  // 使用 Node.js 的 crypto 模組來計算 SHA-256，最穩定且支援度最高
-  return crypto.createHash('sha256').update(dataString).digest('hex');
+  // ✅ 改用 Web Crypto API (相容 Cloudflare Edge / Vercel Edge Runtime)
+  const msgUint8 = new TextEncoder().encode(dataString);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
