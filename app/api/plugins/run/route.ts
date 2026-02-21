@@ -418,11 +418,6 @@ export async function POST(request: Request) {
       sealed_record_id: auditReport.sealed_record_id ?? null, 
       auditReport
     });
-
-    return NextResponse.json({
-      success: true, version_hash: version.version_hash, fingerprint: actualFingerprint,
-      evidence_id: evidenceItem.id, sealed_record_id: auditReport.sealed_record_id ?? null, auditReport
-    });
     
 
   } catch (err: any) {
