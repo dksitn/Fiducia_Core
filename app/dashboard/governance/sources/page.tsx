@@ -34,9 +34,9 @@ export default function GovernanceDashboardPage() {
         issue: task.issue,
       }));
       setPendingTasks(formatted);
-      setSelectedTask(prev => {
-        // 保留原本選中的 task（如果還存在），否則選第一筆
-        if (prev) {
+      setSelectedTask((prev: any) => {
+          // 保留原本選中的 task（如果還存在），否則選第一筆
+          if (prev) {
           const stillExists = formatted.find(t => t.id === prev.id);
           if (stillExists) return stillExists;
         }
