@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/utils/supabase'; // 確保這裡引入你原本專案設定好的 supabase client
 
+export const runtime = 'edge'; // 🚀 加入這行，告訴 Cloudflare 這是邊緣函數
+
 export async function POST(request: Request) {
   try {
     // 1. 解析前端或外部系統傳來的 JSON
