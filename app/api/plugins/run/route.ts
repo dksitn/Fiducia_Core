@@ -232,19 +232,66 @@ export async function POST(request: Request) {
       storagePath = `plugin_results/l1_insider_${Date.now()}.json`;
 
     } else if (pluginId === 'L1_DIVIDENDS_SYNC') {
-      const dividendEvents = [
-        { company_code: '2330', action_type: 'CASH_DIVIDEND', announcement_date: '2023-02-14', ex_date: '2023-03-16', payment_date: '2023-04-13', cash_dividend_per_share: 2.75, source_ref: 'MOPS_DIVIDEND' },
-        { company_code: '2330', action_type: 'CASH_DIVIDEND', announcement_date: '2024-02-06', ex_date: '2024-03-18', payment_date: '2024-04-11', cash_dividend_per_share: 3.50, source_ref: 'MOPS_DIVIDEND' }
-      ];
       let successCount = 0;
-      for (const de of dividendEvents) {
-        const { error } = await supabaseAdmin.from('mkt_dividends').insert({ ...de, status: 'VALID' });
-        if (!error) successCount++;
+      const findings = [];
+      
+      try {
+        // 1. [Extract 萃取]：呼叫真實 API (這裡先預留你的真實 API 網址)
+        // 💡 提示：如果未來使用付費 API，可以在 headers 帶入 process.env.YOUR_API_KEY
+        const apiUrl = 'https://openapi.twse.com.tw/v1/opendata/t187ap11_L'; // 假設的 TWSE 股利端點
+        const response = await fetch(apiUrl, { method: 'GET', signal: AbortSignal.timeout(10000) }); // 設定 10 秒 Timeout
+        
+        if (!response.ok) throw new Error(`API 連線失敗，狀態碼: ${response.status}`);
+        
+        const rawData = await response.json();
+        
+        // 如果 API 回傳不是陣列，拋出異常
+        if (!Array.isArray(rawData)) throw new Error('API 回傳格式不符預期，應為陣列');
+
+        // 2. [Transform 轉換] 與 [Load 載入]
+        for (const companyCode of TARGET_COMPANIES) {
+          // 在真實 API 陣列中尋找目標公司的資料
+          const companyDividends = rawData.filter((item: any) => String(item['公司代號']).trim() === companyCode);
+          
+          if (companyDividends.length === 0) continue; // 如果這家公司這次沒發放股利，跳過
+
+          for (const div of companyDividends) {
+            // 將外部 API 混亂的欄位，轉換 (Transform) 成我們資料庫的乾淨 Schema
+            const transformedData = {
+              company_code: companyCode,
+              action_type: 'CASH_DIVIDEND', // 視 API 結構判斷是現金還是股票股利
+              announcement_date: div['董事會決議日期'] || null, // 對應真實 API 欄位名稱
+              ex_date: div['除息交易日'] || null,
+              payment_date: div['現金股利發放日'] || null,
+              cash_dividend_per_share: parseFloat(div['現金股利']) || 0,
+              source_ref: 'TWSE_OPENAPI',
+              status: 'VALID'
+            };
+
+            // 寫入 Supabase (Load)
+            const { error } = await supabaseAdmin
+              .from('mkt_dividends')
+              .insert(transformedData);
+              
+            if (!error) successCount++;
+            else console.error(`[L1_DIVIDENDS] 寫入失敗 (${companyCode}):`, error.message);
+          }
+        }
+      } catch (err: any) {
+        // 🛡️ 防禦性設計：即使 API 掛了，系統也不會崩潰，而是記錄在 auditReport 裡面
+        console.error('[L1_DIVIDENDS] ETL 管線發生錯誤:', err.message);
+        findings.push({ status: 'FAILED', desc: err.message });
       }
-      auditReport = { source_plugin: "L1_DIVIDENDS_SYNC", status: "SUCCESS", total_synced: successCount };
-      version_hash = `l1-div-${Date.now()}`;
-      summary = `[L1 日誌] 股利除權息事件附加完成`;
-      storagePath = `plugin_results/l1_div_${Date.now()}.json`;
+
+      auditReport = { 
+        source_plugin: "L1_DIVIDENDS_SYNC", 
+        status: findings.length > 0 ? "PARTIAL_FAIL" : "SUCCESS", 
+        total_synced: successCount,
+        errors: findings 
+      };
+      version_hash = `l1-div-real-${Date.now()}`;
+      summary = `[L1 日誌] 真實股利除權息管線執行完成 (成功: ${successCount} 筆)`;
+      storagePath = `plugin_results/l1_div_real_${Date.now()}.json`;
 
     // ==========================================
     // S10: 業務封存引擎
@@ -340,12 +387,28 @@ export async function POST(request: Request) {
       })
       .select('id').single();
 
-    if (itemError) throw itemError;
+        // 🌟 [R9 修復區塊]：狀態同步與證據綁定 (Status Transition & Evidence Binding)
+    // 當 L3 封存成功且產生了 evidence_id 後，回頭更新業務表狀態，確保資料一致性！
+    if (pluginId === 'P_FIN_REPORT_VERSION_SEAL' && auditReport.sealed_record_id) {
+      const { error: updateErr } = await supabaseAdmin
+        .from('fin_financial_fact')
+        .update({ status: 'VALID', evidence_id: evidenceItem.id }) // 同步狀態並綁定證據 ID
+        .eq('id', auditReport.sealed_record_id);
+      if (updateErr) console.error('[L3 同步失敗] 財報狀態更新錯誤:', updateErr.message);
+    } 
+    else if (pluginId === 'P_ESG_REPORT_VERSION_SEAL' && auditReport.sealed_record_id) {
+      const { error: updateErr } = await supabaseAdmin
+        .from('esg_metrics')
+        .update({ status: 'VALID', evidence_id: evidenceItem.id })
+        .eq('id', auditReport.sealed_record_id);
+      if (updateErr) console.error('[L3 同步失敗] ESG 狀態更新錯誤:', updateErr.message);
+    }
 
     return NextResponse.json({
       success: true, version_hash: version.version_hash, fingerprint: actualFingerprint,
       evidence_id: evidenceItem.id, sealed_record_id: auditReport.sealed_record_id ?? null, auditReport
     });
+    
 
   } catch (err: any) {
     console.error('CRITICAL PLUGIN ERROR:', err.message);
