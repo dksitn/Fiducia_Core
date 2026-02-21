@@ -387,8 +387,14 @@ export async function POST(request: Request) {
       })
       .select('id').single();
 
-        // 🌟 [R9 修復區塊]：狀態同步與證據綁定 (Status Transition & Evidence Binding)
-    // 當 L3 封存成功且產生了 evidence_id 後，回頭更新業務表狀態，確保資料一致性！
+    // 🛑 [R9 生產級防禦]：Fail-Fast 檢查
+    // 如果存證建立失敗，或沒有回傳資料，立刻拋出錯誤中斷！
+    if (itemError || !evidenceItem) {
+      throw new Error(`嚴重錯誤：無法建立金庫存證紀錄，封存程序已被強制終止。詳細原因: ${itemError?.message}`);
+    }
+
+    // 🌟 [R9 修復區塊]：狀態同步與證據綁定 
+    // 👉 因為上面已經擋掉了 null 的情況，TypeScript 現在 100% 確定 evidenceItem 一定有值，就不會報錯了！
     if (pluginId === 'P_FIN_REPORT_VERSION_SEAL' && auditReport.sealed_record_id) {
       const { error: updateErr } = await supabaseAdmin
         .from('fin_financial_fact')
@@ -403,6 +409,15 @@ export async function POST(request: Request) {
         .eq('id', auditReport.sealed_record_id);
       if (updateErr) console.error('[L3 同步失敗] ESG 狀態更新錯誤:', updateErr.message);
     }
+
+    return NextResponse.json({
+      success: true, 
+      version_hash: version.version_hash, 
+      fingerprint: actualFingerprint,
+      evidence_id: evidenceItem.id, // 這裡也安全了
+      sealed_record_id: auditReport.sealed_record_id ?? null, 
+      auditReport
+    });
 
     return NextResponse.json({
       success: true, version_hash: version.version_hash, fingerprint: actualFingerprint,
