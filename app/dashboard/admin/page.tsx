@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
 import * as XLSX from 'xlsx';
 import DownloadReportButton from '@/components/DownloadReportButton';
-import { useAuth } from '../layout';
+import { useAuth } from '@/app/dashboard/auth-context';
 
 const ALLOWED_PLUGINS = [
   'L1_MARKET_DAILY_SYNC', 'L1_MATERIAL_EVENTS_SYNC', 'L1_INDUSTRY_SYNC',

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useAuth } from '../layout';
+import { useAuth } from '@/app/dashboard/auth-context';
 
 export default function GovernanceDashboardPage() {
   const { user, isSuperAdmin, isAuthLoading } = useAuth();
