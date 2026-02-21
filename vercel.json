@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/plugins/run?pluginId=TW_FUNDAMENTAL_SYNC&userId=SYSTEM_CRON",
+      "schedule": "0 2 * * *" 
+    }
+  ]
+}
