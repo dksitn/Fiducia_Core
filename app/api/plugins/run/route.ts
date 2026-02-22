@@ -223,6 +223,94 @@ export async function POST(request: Request) {
       summary = `[L2 快照] 10 家企業財報 12 季同步完成，狀態 VALID (成功: ${successCount} 家)`;
       storagePath = `plugin_results/fin_mops_${Date.now()}.json`;
 
+
+    // ==========================================
+    // S3b: 月營收同步
+    // 接 TWSE t187ap05_L，真實月營收資料
+    // ==========================================
+    } else if (pluginId === 'TW_MONTHLY_REVENUE_SYNC') {
+      const findings: any[] = [];
+      let successCount = 0;
+
+      // 民國年月 → 西元年月 (e.g. "11411" → "2025M11")
+      const rocToGregorian = (rocYM: string): string => {
+        const year = parseInt(rocYM.slice(0, -2)) + 1911;
+        const month = rocYM.slice(-2).padStart(2, '0');
+        return `${year}M${month}`;
+      };
+
+      let revData: any[] = [];
+      try {
+        const res = await fetch('https://openapi.twse.com.tw/v1/opendata/t187ap05_L', {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (res.ok) revData = await res.json();
+      } catch (_) { /* API 失敗：不寫入，直接回報 */ }
+
+      if (!Array.isArray(revData) || revData.length === 0) {
+        throw new Error('t187ap05_L API 無回應或資料為空，請稍後再試');
+      }
+
+      const allRecs: any[] = [];
+
+      for (const companyCode of TARGET_COMPANIES) {
+        const row = revData.find((d: any) => String(d['公司代號'] ?? '').trim() === companyCode);
+        if (!row) {
+          findings.push({ id: companyCode, status: 'NOT_FOUND' });
+          continue;
+        }
+
+        const rocYM  = String(row['資料年月'] ?? '').trim();
+        const period = rocToGregorian(rocYM);
+
+        const parseBigInt = (s: any) => {
+          const n = parseInt(String(s ?? '0').replace(/,/g, ''));
+          return isNaN(n) ? null : n;
+        };
+
+        const revenue       = parseBigInt(row['營業收入-當月營收']);
+        const prevMonthRev  = parseBigInt(row['營業收入-上月營收']);
+        const prevYearRev   = parseBigInt(row['營業收入-去年當月營收']);
+        const momPct        = parseFloat(String(row['營業收入-上月比較增減(%)'] ?? '0'));
+        const yoyPct        = parseFloat(String(row['營業收入-去年同月增減(%)'] ?? '0'));
+        const cumulativeRev = parseBigInt(row['累計營業收入-當月累計營收']);
+
+        const rec = {
+          company_code:   companyCode,
+          period,
+          revenue,
+          prev_month_rev: prevMonthRev,
+          prev_year_rev:  prevYearRev,
+          mom_pct:        isNaN(momPct) ? null : momPct,
+          yoy_pct:        isNaN(yoyPct) ? null : yoyPct,
+          cumulative_rev: cumulativeRev,
+          dq_score:       92,
+          status:         'DRAFT',
+        };
+        allRecs.push(rec);
+        findings.push({ id: companyCode, status: 'SYNCED', period, revenue });
+        successCount++;
+      }
+
+      if (allRecs.length > 0) {
+        const { error: upsertErr } = await supabaseAdmin
+          .from('fin_monthly_revenue')
+          .upsert(allRecs, { onConflict: 'company_code,period' });
+        if (upsertErr) throw new Error(`月營收批次寫入失敗: ${upsertErr.message}`);
+      }
+
+      auditReport = {
+        data_source: 'TWSE OpenAPI (t187ap05_L)',
+        source_plugin: 'TW_MONTHLY_REVENUE_SYNC',
+        executed_at: new Date().toISOString(),
+        operator_uid: userId,
+        total_synced: successCount,
+        findings,
+      };
+      version_hash = `fin-monthly-${Date.now()}`;
+      summary = `[L2 月營收] ${successCount} 家企業最新月營收同步完成`;
+      storagePath = `plugin_results/fin_monthly_${Date.now()}.json`;
+
     // ==========================================
     // S4: L2 永續 ESG 數據同步
     // 接 TWSE t187ap15_L，無資料時 fallback 行業估算

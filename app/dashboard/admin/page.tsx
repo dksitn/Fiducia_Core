@@ -23,6 +23,7 @@ const getPluginUIInfo = (pluginId: string) => {
     case 'P_FIN_REPORT_VERSION_SEAL': return { icon: '🏦', title: 'L3: 財報引擎與封存', desc: '計算 DQ 並版本封存', btnText: '執行封存', themeColor: '#4F46E5' };
     case 'P_ESG_REPORT_VERSION_SEAL': return { icon: '🌿', title: 'L3: 永續引擎與封存', desc: '驗證 SLL 並上鏈封存', btnText: '執行封存', themeColor: '#059669' };
     case 'TW_FUNDAMENTAL_SYNC': return { icon: '🏛️', title: 'L2: 官方財報同步', desc: '寫入近三期財報快照', btnText: '執行抓取', themeColor: '#475569' };
+    case 'TW_MONTHLY_REVENUE_SYNC': return { icon: '📅', title: 'L2: 月營收同步', desc: 't187ap05_L 最新月份實際值', btnText: '執行同步', themeColor: '#0369A1' };
     case 'ESG_METRICS_SYNC': return { icon: '🌱', title: 'L2: 永續報告同步', desc: '寫入三年碳排與確信', btnText: '執行同步', themeColor: '#16A34A' };
     case 'L1_MARKET_DAILY_SYNC': return { icon: '📈', title: 'L1: 市場行情', desc: '時序同步 (T~T-2)', btnText: '同步行情', themeColor: '#D97706' };
     case 'L1_MATERIAL_EVENTS_SYNC': return { icon: '📢', title: 'L1: 重大事件', desc: '不可變附加重大裁罰', btnText: '同步事件', themeColor: '#DC2626' };
@@ -43,6 +44,7 @@ const getPluginIdFromSummary = (summary: string) => {
   if (summary.includes('財報版本') || summary.includes('L3 封存') || summary.includes('財務指標')) return 'P_FIN_REPORT_VERSION_SEAL';
   if (summary.includes('永續') || summary.includes('ESG')) return 'ESG_METRICS_SYNC';
   if (summary.includes('財報三表') || summary.includes('L2 快照') || summary.includes('12季')) return 'TW_FUNDAMENTAL_SYNC';
+  if (summary.includes('月營收')) return 'TW_MONTHLY_REVENUE_SYNC';
   if (summary.includes('PM 決策') || summary.includes('自營')) return 'P_SEC_PM_DECISION_ENGINE';
   if (summary.includes('供應鏈')) return 'CVE_TRACK';
   return null;
@@ -79,7 +81,8 @@ export default function AdminPage() {
       const mockPlugins = [
         { id: 905, plugin_id: 'CVE_TRACK' }, { id: 906, plugin_id: 'DB_SCHEMA_DRIFT' },
         { id: 903, plugin_id: 'P_FIN_REPORT_VERSION_SEAL' }, { id: 904, plugin_id: 'P_ESG_REPORT_VERSION_SEAL' },
-        { id: 901, plugin_id: 'TW_FUNDAMENTAL_SYNC' }, { id: 101, plugin_id: 'L1_MARKET_DAILY_SYNC' },
+        { id: 901, plugin_id: 'TW_FUNDAMENTAL_SYNC' }, { id: 907, plugin_id: 'TW_MONTHLY_REVENUE_SYNC' },
+        { id: 101, plugin_id: 'L1_MARKET_DAILY_SYNC' },
         { id: 102, plugin_id: 'L1_MATERIAL_EVENTS_SYNC' }, { id: 103, plugin_id: 'L1_INDUSTRY_SYNC' },
         { id: 104, plugin_id: 'L1_INSIDER_HOLDINGS_SYNC' }, { id: 105, plugin_id: 'L1_DIVIDENDS_SYNC' },
         { id: 902, plugin_id: 'ESG_METRICS_SYNC' }, { id: 911, plugin_id: 'P_SEC_PM_DECISION_ENGINE' },
@@ -128,6 +131,7 @@ export default function AdminPage() {
     if (!confirm('確定要將此批 API 抓取的草稿資料 (DRAFT) 核決放行至正式資料庫 (VALID) 嗎？')) return;
     try {
       await supabase.from('fin_financial_fact').update({ status: 'VALID' }).eq('status', 'DRAFT');
+      await supabase.from('fin_monthly_revenue').update({ status: 'VALID' }).eq('status', 'DRAFT');
       await supabase.from('esg_metrics').update({ status: 'VALID' }).eq('status', 'DRAFT');
       await supabase.from('mkt_daily_series').update({ status: 'VALID' }).eq('status', 'DRAFT');
       alert('✅ 核決成功！所有 L1/L2 數據皆已正式進入 Supabase 金庫 (VALID 狀態)。');
@@ -373,6 +377,13 @@ export default function AdminPage() {
                   industry: '全行業通用',
                   apiSource: '證交所 t187ap14_L（綜合損益表）＋ t187ap03_L（資產負債表）',
                   dataDesc: '營業收入、本期淨利、資產總計、負債總計、權益總計，推算 12 季歷史軌跡，寫入財務事實表（草稿待審）'
+                },
+                {
+                  pluginId: 'TW_MONTHLY_REVENUE_SYNC', icon: '📅', title: '月營收同步',
+                  btnText: '執行同步', themeColor: '#0369A1',
+                  industry: '全行業通用',
+                  apiSource: '證交所 t187ap05_L（月營收報表）',
+                  dataDesc: '當月營收、上月營收、去年同月、月增率、年增率、累計營收（千元），最新月份實際值，寫入月營收表（草稿待審）'
                 },
                 {
                   pluginId: 'ESG_METRICS_SYNC', icon: '🌱', title: '永續碳排報告同步',
