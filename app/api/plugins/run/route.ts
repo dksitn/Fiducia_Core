@@ -176,7 +176,7 @@ export async function POST(request: Request) {
             operating_cash_flow: Math.round(baseNetIncome * growthRatio * seasonal * 1.15),
             capital_expenditure: Math.round(baseNetIncome * growthRatio * seasonal * 0.38),
             dq_score:            dqScore,
-            status:              'VALID', // ✅ 直接 VALID，前端可立即讀取
+            status:              'DRAFT', // 寫入 DRAFT → 進治理佇列 → 批次放行後升為 VALID
           };
           await supabaseAdmin.from('fin_financial_fact').upsert(rec, { onConflict: 'company_code,period' });
           if (i === PERIODS.length - 1) latestMetrics = rec;
@@ -268,7 +268,7 @@ export async function POST(request: Request) {
             period:          year,
             carbon_emission: scope1 + scope2,
             dq_score:        dqScore,
-            status:          dqScore >= 80 ? 'VALID' : 'REJECTED', // ✅ 直接 VALID，不再寫 DRAFT
+            status:          dqScore >= 80 ? 'DRAFT' : 'REJECTED', // DRAFT 進治理佇列，DQ<80 直接拒絕
             year,
             scope1_tco2e:    scope1,
             scope2_tco2e:    scope2,
