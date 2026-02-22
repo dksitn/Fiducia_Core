@@ -7,7 +7,20 @@ import {
 } from 'recharts';
 import { useAuth } from '@/app/dashboard/auth-context';
 
-// ── 千元格式化（資料庫與 API 均為千元單位）
+// ── 格式化：fin_financial_fact 存元，fin_monthly_revenue 存千元
+// 季度資料（fin_financial_fact）單位：元
+const fmtYuan = (val: number | null | undefined): string => {
+  if (val == null) return 'N/A';
+  const neg = val < 0;
+  const abs = Math.abs(val);
+  let s = '';
+  if      (abs >= 1_000_000_000_000) s = `${(abs / 1_000_000_000_000).toFixed(2)} 兆`;
+  else if (abs >= 100_000_000)       s = `${(abs / 100_000_000).toFixed(2)} 億`;
+  else if (abs >= 10_000)            s = `${(abs / 10_000).toFixed(0)} 萬`;
+  else                               s = abs.toLocaleString();
+  return `${neg ? '-' : ''}${s}`;
+};
+// 月營收（fin_monthly_revenue）單位：千元
 const fmtK = (val: number | null | undefined): string => {
   if (val == null) return 'N/A';
   const neg = val < 0;
@@ -32,7 +45,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <div key={i} className="flex items-center gap-2 mt-1">
           <span className="w-2 h-2 rounded-full" style={{ background: e.color }} />
           <span className="text-slate-600 font-bold">{e.name}：</span>
-          <span className="font-black" style={{ color: e.color }}>{fmtK(e.value)}</span>
+          <span className="font-black" style={{ color: e.color }}>
+              {e.dataKey === 'revenue' && e.name === '月營收' ? fmtK(e.value) : fmtYuan(e.value)}
+            </span>
         </div>
       ))}
     </div>
@@ -195,7 +210,7 @@ export default function FinanceDashboardPage() {
             {/* 最新季淨利 */}
             <KpiCard
               label={`稅後淨利 (${latestQuarter?.period ?? '—'})`}
-              value={latestQuarter ? fmtK(latestQuarter.net_income) : 'N/A'}
+              value={latestQuarter ? fmtYuan(latestQuarter.net_income) : 'N/A'}
               sub="季度財報"
               subColor="text-slate-500"
               badge="季度"
@@ -213,7 +228,7 @@ export default function FinanceDashboardPage() {
             {/* 自由現金流 */}
             <KpiCard
               label={`自由現金流 (${latestQuarter?.period ?? '—'})`}
-              value={latestQuarter ? fmtK(latestQuarter.fcf) : 'N/A'}
+              value={latestQuarter ? fmtYuan(latestQuarter.fcf) : 'N/A'}
               sub="OCF - CapEx"
               subColor={latestQuarter?.fcf < 0 ? 'text-rose-500' : 'text-slate-500'}
               badge="季度"
@@ -236,7 +251,12 @@ export default function FinanceDashboardPage() {
                 <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} dy={8}
                   tickFormatter={v => v.replace('M', '/')} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false}
-                  tickFormatter={v => v >= 100_000 ? `${(v/100_000).toFixed(0)}億` : `${(v/10_000).toFixed(0)}萬`} width={55} />
+                  tickFormatter={v => {
+                    const abs = Math.abs(v);
+                    if (abs >= 100_000_000) return `${(v/100_000_000).toFixed(1)}億千`;
+                    if (abs >= 100_000) return `${(v/100_000).toFixed(0)}億`;
+                    return `${(v/10_000).toFixed(0)}萬`;
+                  }} width={60} />
                 <Tooltip content={<CustomTooltip />} />
                 <Line type="monotone" dataKey="revenue" name="月營收" stroke="#3B82F6" strokeWidth={3}
                   dot={{ r: 3, fill: '#fff', strokeWidth: 2, stroke: '#3B82F6' }} activeDot={{ r: 7 }} />
@@ -255,7 +275,12 @@ export default function FinanceDashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} dy={8} />
                 <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false}
-                  tickFormatter={v => v >= 100_000 ? `${(v/100_000).toFixed(0)}億` : `${(v/10_000).toFixed(0)}萬`} width={55} />
+                  tickFormatter={v => {
+                    const abs = Math.abs(v);
+                    if (abs >= 1_000_000_000_000) return `${(v/1_000_000_000_000).toFixed(1)}兆`;
+                    if (abs >= 100_000_000) return `${(v/100_000_000).toFixed(0)}億`;
+                    return `${(v/10_000).toFixed(0)}萬`;
+                  }} width={60} />
                 <Tooltip content={<CustomTooltip />} />
                 <ReferenceLine y={0} stroke="#E2E8F0" strokeWidth={1} />
                 <Line type="monotone" dataKey="netIncome" name="稅後淨利" stroke="#10B981" strokeWidth={3}
