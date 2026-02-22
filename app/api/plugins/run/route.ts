@@ -136,6 +136,9 @@ export async function POST(request: Request) {
         if (balRes.ok) balData = await balRes.json();
       } catch (_) { /* API 失敗：fallback 接手 */ }
 
+      // ✅ 收集所有記錄後批次寫入，避免 120 次串行請求超過 Edge CPU 時間限制
+      const allRecs: any[] = [];
+
       for (const companyCode of TARGET_COMPANIES) {
         const compInc = (Array.isArray(incData) ? incData : []).find((d: any) => String(d['公司代號'] ?? '').trim() === companyCode) || {};
         const compBal = (Array.isArray(balData) ? balData : []).find((d: any) => String(d['公司代號'] ?? '').trim() === companyCode) || {};
@@ -146,7 +149,6 @@ export async function POST(request: Request) {
         const apiLiabilities  = getVal(compBal, ['負債總計','負債總額']) * 1000;
         const apiEquity       = getVal(compBal, ['權益總計','權益總額']) * 1000;
 
-        // ✅ API 有數字用 API，否則用內建 fallback
         const fb             = FIN_BASE[companyCode];
         const baseRevenue    = apiRevenue     || fb.revenue;
         const baseNetIncome  = apiNetIncome   || fb.net_income;
@@ -159,9 +161,7 @@ export async function POST(request: Request) {
         let latestMetrics = null;
         for (let i = 0; i < PERIODS.length; i++) {
           const period = PERIODS[i];
-          // ✅ 線性成長：2022Q1=0.78 → 2024Q4=1.0
           const growthRatio = 0.78 + (i / (PERIODS.length - 1)) * 0.22;
-          // ✅ 季節性：Q1 淡季 / Q4 旺季
           const q = parseInt(period.slice(-1));
           const seasonal = q === 1 ? 0.82 : q === 2 ? 0.94 : q === 3 ? 1.03 : 1.21;
 
@@ -176,15 +176,21 @@ export async function POST(request: Request) {
             operating_cash_flow: Math.round(baseNetIncome * growthRatio * seasonal * 1.15),
             capital_expenditure: Math.round(baseNetIncome * growthRatio * seasonal * 0.38),
             dq_score:            dqScore,
-            status:              'DRAFT', // 寫入 DRAFT → 進治理佇列 → 批次放行後升為 VALID
+            status:              'DRAFT',
           };
-          await supabaseAdmin.from('fin_financial_fact').upsert(rec, { onConflict: 'company_code,period' });
+          allRecs.push(rec);
           if (i === PERIODS.length - 1) latestMetrics = rec;
         }
 
         findings.push({ id: companyCode, status: 'SYNCED', data_source: dataSource, dq_score: dqScore, latest: latestMetrics });
         successCount++;
       }
+
+      // ✅ 一次批次寫入全部 120 筆（1 次網路請求 vs 舊版 120 次）
+      const { error: upsertErr } = await supabaseAdmin
+        .from('fin_financial_fact')
+        .upsert(allRecs, { onConflict: 'company_code,period' });
+      if (upsertErr) throw new Error(`財報批次寫入失敗: ${upsertErr.message}`);
 
       auditReport = {
         data_source: "TWSE OpenAPI (t187ap14_L + t187ap03_L) + Builtin Fallback",
