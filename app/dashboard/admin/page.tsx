@@ -11,8 +11,9 @@ const ALLOWED_PLUGINS = [
   'L1_MARKET_DAILY_SYNC', 'L1_MATERIAL_EVENTS_SYNC', 'L1_INDUSTRY_SYNC',
   'L1_INSIDER_HOLDINGS_SYNC', 'L1_DIVIDENDS_SYNC', 'TW_FUNDAMENTAL_SYNC',
   'ESG_METRICS_SYNC', 'P_FIN_REPORT_VERSION_SEAL', 'P_ESG_REPORT_VERSION_SEAL',
-  'P_SEC_PM_DECISION_ENGINE', 'P_SEC_RESEARCH_REPORT_ENGINE',
-  'P_SEC_COMPLIANCE_RESTRICTION_ENGINE', 'CVE_TRACK', 'DB_SCHEMA_DRIFT'
+  'P_SEC_PM_DECISION_ENGINE', 'CVE_TRACK', 'DB_SCHEMA_DRIFT'
+  // ✅ P_SEC_RESEARCH_REPORT_ENGINE 已移除
+  // ✅ P_SEC_COMPLIANCE_RESTRICTION_ENGINE 已移除
 ];
 
 const getPluginUIInfo = (pluginId: string) => {
@@ -25,12 +26,12 @@ const getPluginUIInfo = (pluginId: string) => {
     case 'ESG_METRICS_SYNC': return { icon: '🌱', title: 'L2: 永續報告同步', desc: '寫入三年碳排與確信', btnText: '執行同步', themeColor: '#16A34A' };
     case 'L1_MARKET_DAILY_SYNC': return { icon: '📈', title: 'L1: 市場行情', desc: '時序同步 (T~T-2)', btnText: '同步行情', themeColor: '#D97706' };
     case 'L1_MATERIAL_EVENTS_SYNC': return { icon: '📢', title: 'L1: 重大事件', desc: '不可變附加重大裁罰', btnText: '同步事件', themeColor: '#DC2626' };
-    case 'L1_INDUSTRY_SYNC': return { icon: '🏭', title: 'L1: 產業分類', desc: 'SCD 緩慢變動維度', btnText: '同步產業', themeColor: '#9CA3AF' };
+    case 'L1_INDUSTRY_SYNC': return { icon: '🏭', title: 'L1: 產業分類', desc: 'SCD 緩慢變動維度', btnText: '同步產業', themeColor: '#0891B2' };
     case 'L1_INSIDER_HOLDINGS_SYNC': return { icon: '🕵️', title: 'L1: 董監持股', desc: 'Append-Only 籌碼變動', btnText: '同步籌碼', themeColor: '#7C3AED' };
     case 'L1_DIVIDENDS_SYNC': return { icon: '💰', title: 'L1: 股利與除權息', desc: 'Append-Only 公司行動', btnText: '同步股利', themeColor: '#D946EF' };
     case 'P_SEC_PM_DECISION_ENGINE': return { icon: '📊', title: 'SEC: PM決策', desc: '計算風控與觸發 Gap', btnText: '執行運算', themeColor: '#2563EB' };
-    case 'P_SEC_RESEARCH_REPORT_ENGINE': return { icon: '📝', title: 'SEC: 研報引擎', desc: '自動化圖表與章節', btnText: '產製報告', themeColor: '#DB2777' };
-    case 'P_SEC_COMPLIANCE_RESTRICTION_ENGINE': return { icon: '⚖️', title: 'SEC: 法遵引擎', desc: '比對制裁名單與爭議', btnText: '執行掃描', themeColor: '#9333EA' };
+    // ✅ P_SEC_RESEARCH_REPORT_ENGINE 已移除
+    // ✅ P_SEC_COMPLIANCE_RESTRICTION_ENGINE 已移除
     default: return { icon: '⚡', title: '任務', desc: '自定義腳本', btnText: '執行任務', themeColor: '#1E293B' };
   }
 };
@@ -82,7 +83,8 @@ export default function AdminPage() {
         { id: 102, plugin_id: 'L1_MATERIAL_EVENTS_SYNC' }, { id: 103, plugin_id: 'L1_INDUSTRY_SYNC' },
         { id: 104, plugin_id: 'L1_INSIDER_HOLDINGS_SYNC' }, { id: 105, plugin_id: 'L1_DIVIDENDS_SYNC' },
         { id: 902, plugin_id: 'ESG_METRICS_SYNC' }, { id: 911, plugin_id: 'P_SEC_PM_DECISION_ENGINE' },
-        { id: 912, plugin_id: 'P_SEC_RESEARCH_REPORT_ENGINE' }, { id: 913, plugin_id: 'P_SEC_COMPLIANCE_RESTRICTION_ENGINE' }
+        // ✅ id:912 P_SEC_RESEARCH_REPORT_ENGINE 已移除
+        // ✅ id:913 P_SEC_COMPLIANCE_RESTRICTION_ENGINE 已移除
       ];
       const merged = [...(data || [])];
       mockPlugins.forEach(mp => { if (!merged.find(p => p.plugin_id === mp.plugin_id)) merged.push(mp); });
