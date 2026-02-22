@@ -538,21 +538,19 @@ export default function SecuritiesIndustryPage() {
                   <h3 className="text-sm font-bold text-slate-800">監理公告與重大事件日誌</h3>
                   <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">mkt_material_events</span>
                 </div>
-                <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                   {eventsData.length === 0 ? (
                     <p className="text-xs text-slate-400 py-4">近期無重大裁罰或爭議事件。</p>
                   ) : eventsData.map((ev, i) => (
-                    <div key={i} className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex gap-4 items-start">
-                      <div className="w-24 shrink-0 text-center">
-                        <span className={`text-[10px] px-2 py-1 rounded font-bold block mb-1 ${ev.severity === 'HIGH' || ev.event_type === 'PENALTY' ? 'bg-rose-200 text-rose-800' : 'bg-slate-200 text-slate-700'}`}>
+                    <div key={i} className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold shrink-0 ${ev.severity === 'HIGH' || ev.event_type === 'PENALTY' ? 'bg-rose-200 text-rose-800' : 'bg-indigo-50 text-indigo-700'}`}>
                           {ev.event_type}
                         </span>
-                        <span className="text-[9px] font-mono text-slate-400">{ev.event_date}</span>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">{ev.event_date}</span>
+                        <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded font-bold ml-auto shrink-0">{ev.status}</span>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-slate-700 mb-1">{ev.description || ev.headline || '—'}</p>
-                        <p className="text-[9px] text-slate-400 font-mono">Status: {ev.status}</p>
-                      </div>
+                      <p className="text-xs font-bold text-slate-700 leading-relaxed">{ev.description || ev.headline || '—'}</p>
                     </div>
                   ))}
                 </div>
