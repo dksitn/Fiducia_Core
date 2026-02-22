@@ -69,43 +69,9 @@ export default function GovernanceDashboardPage() {
   }, []);
 
   // ── 核心放行邏輯（單筆）────────────────────────────────────
-  // ✅ 完全用複合主鍵 (company_code, period)，不依賴 id
+  // ✅ 不從前端查 payload，避免 RLS 擋住 fin_financial_fact
+  // ✅ 只傳識別資訊，route.ts 用 supabaseAdmin（service role）自行查詢
   const runApprove = async (task: any) => {
-    const tableName = task.type === '財務報表' ? 'fin_financial_fact' : 'esg_metrics';
-
-    // 1. 以複合主鍵取 payload（先查 DRAFT，找不到再查任意狀態）
-    let finalPayload: any = null;
-    const { data: draftPayload } = await supabase
-      .from(tableName)
-      .select('*')
-      .eq('company_code', task.company)
-      .eq('period', task.period)
-      .eq('status', 'DRAFT')
-      .maybeSingle();
-
-    if (draftPayload) {
-      finalPayload = draftPayload;
-    } else {
-      const { data: anyPayload } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('company_code', task.company)
-        .eq('period', task.period)
-        .maybeSingle();
-      finalPayload = anyPayload;
-    }
-
-    if (!finalPayload) {
-      throw new Error(`找不到 ${task.company} / ${task.period} 的原始資料`);
-    }
-    if (finalPayload.status === 'VALID') {
-      throw new Error(`${task.company} ${task.period} 已是 VALID，無需重複放行`);
-    }
-    if (finalPayload.status === 'REJECTED') {
-      throw new Error(`${task.company} ${task.period} 已被拒絕，無法放行`);
-    }
-
-    // 2. 呼叫 L3 封存引擎
     const pluginId = task.type === '財務報表'
       ? 'P_FIN_REPORT_VERSION_SEAL'
       : 'P_ESG_REPORT_VERSION_SEAL';
@@ -120,21 +86,13 @@ export default function GovernanceDashboardPage() {
           companyId: task.company,
           orgId:     task.company,
           period:    task.period,
-          payload:   finalPayload,
+          // payload 不從前端傳，route.ts 自己用 service role 查
         },
       }),
     });
 
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || '封存引擎回傳錯誤');
-
-    // 3. 回寫狀態（route.ts 已做，這裡再做一次確保前端同步）
-    await supabase
-      .from(tableName)
-      .update({ status: 'VALID' })
-      .eq('company_code', task.company)
-      .eq('period', task.period);
-
     return result;
   };
 
