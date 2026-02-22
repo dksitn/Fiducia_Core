@@ -297,6 +297,14 @@ export async function POST(request: Request) {
           .from('fin_monthly_revenue')
           .upsert(allRecs, { onConflict: 'company_code,period' });
         if (upsertErr) throw new Error(`月營收批次寫入失敗: ${upsertErr.message}`);
+
+        // ✅ 自動放行：寫入後直接升為 VALID，Finance 頁面即可查詢
+        const { error: approveErr } = await supabaseAdmin
+          .from('fin_monthly_revenue')
+          .update({ status: 'VALID' })
+          .in('company_code', TARGET_COMPANIES)
+          .eq('status', 'DRAFT');
+        if (approveErr) console.warn('[月營收自動放行失敗]', approveErr.message);
       }
 
       auditReport = {
@@ -974,4 +982,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-
