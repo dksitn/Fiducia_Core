@@ -79,4 +79,4 @@ async function fetchAndUpload() {
   console.log("🎉 全部同步完成！");
 }
 
-fetchAndUpload();s
+fetchAndUpload();
