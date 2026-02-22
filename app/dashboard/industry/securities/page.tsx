@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
 import {
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
+  ComposedChart, LineChart, Line, Bar, XAxis, YAxis, CartesianGrid, // 🟢 新增 LineChart
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
@@ -33,6 +33,9 @@ export default function SecuritiesIndustryPage() {
   const [mktData, setMktData] = useState<any[]>([]);
   const [esgData, setEsgData] = useState<any>(null);
   const [eventsData, setEventsData] = useState<any[]>([]);
+  
+  // 🟢 新增：存放 150 天趨勢圖的資料
+  const [trendChartData, setTrendChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = async (companyCode: string) => {
@@ -44,6 +47,34 @@ export default function SecuritiesIndustryPage() {
         supabase.from('esg_metrics').select('*').eq('company_code', companyCode).eq('status', 'VALID').order('year', { ascending: false }).limit(1),
         supabase.from('mkt_material_events').select('*').eq('company_code', companyCode).eq('status', 'VALID').order('event_date', { ascending: false }).limit(5),
       ]);
+
+      // 🟢 新增：呼叫趨勢圖 Mock API，不阻斷原有資料流
+      try {
+        const trendRes = await fetch(`/api/charts/market-trend?companyCode=${companyCode}`);
+        if (trendRes.ok) {
+          const trendJson = await trendRes.json();
+          if (trendJson.success) {
+            const { targetData, benchmarkData } = trendJson.data;
+            if (targetData?.length > 0 && benchmarkData?.length > 0) {
+              const baseTargetClose = targetData[0].close;
+              const baseBenchmarkClose = benchmarkData[0].close;
+
+              const combinedChartData = targetData.map((tItem: any, index: number) => {
+                const bItem = benchmarkData[index] || benchmarkData[benchmarkData.length - 1];
+                return {
+                  date: tItem.trade_date.substring(5), // 只顯示 MM-DD
+                  targetReturn: ((tItem.close - baseTargetClose) / baseTargetClose) * 100,
+                  benchmarkReturn: ((bItem.close - baseBenchmarkClose) / baseBenchmarkClose) * 100,
+                };
+              });
+              setTrendChartData(combinedChartData);
+            }
+          }
+        }
+      } catch (mockErr) {
+        console.error('Mock 趨勢資料獲取失敗:', mockErr);
+      }
+
       setFinData(fin.data || []);
       setMktData(mkt.data || []);
       setEsgData(esg.data?.[0] || null);
@@ -110,14 +141,6 @@ export default function SecuritiesIndustryPage() {
     revenue: (d.revenue / 100_000_000).toFixed(1),
     margin: d.revenue > 0 ? ((d.net_income / d.revenue) * 100).toFixed(1) : 0,
   }));
-
-  const factorData = [
-    { subject: '價值', score: isGapDetected ? 0 : 80, fullMark: 100 },
-    { subject: '成長', score: isGapDetected ? 0 : (cagr > 10 ? 95 : 65), fullMark: 100 },
-    { subject: '動能', score: isGapDetected ? 0 : 75, fullMark: 100 },
-    { subject: '品質', score: isGapDetected ? 0 : (cfo_ni >= 1 ? 95 : 70), fullMark: 100 },
-    { subject: '低波動', score: isGapDetected ? 0 : 85, fullMark: 100 },
-  ];
 
   const TABS: { id: TabId; label: string }[] = [
     { id: 'RESEARCH', label: '1. 基本面與研究 (3年期)' },
@@ -212,30 +235,71 @@ export default function SecuritiesIndustryPage() {
           {/* ── RESEARCH ─────────────────────────────── */}
           {activeTab === 'RESEARCH' && !isGapDetected && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-800">歷史財務趨勢 (營收 vs 淨利率)</h3>
-                    <p className="text-[10px] text-indigo-600 font-bold mt-1">有效快照 {finData.length} 季</p>
+              
+              {/* 🟢 左側區塊：將原本的 col-span-2 改為 flex-col 容器，裝下兩張圖 */}
+              <div className="lg:col-span-2 flex flex-col gap-6">
+                
+                {/* 1. 原有的財務趨勢圖 */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">歷史財務趨勢 (營收 vs 淨利率)</h3>
+                      <p className="text-[10px] text-indigo-600 font-bold mt-1">有效快照 {finData.length} 季</p>
+                    </div>
+                    <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">Source: fin_financial_fact</span>
                   </div>
-                  <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">Source: fin_financial_fact</span>
+                  <div style={{ width: '100%', height: 280 }}>
+                    <ResponsiveContainer>
+                      <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                        <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}億`} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
+                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} />
+                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                        <Bar yAxisId="left" dataKey="revenue" name="營業收入(億)" fill="#E2E8F0" radius={[4, 4, 0, 0]} barSize={30} />
+                        <Line yAxisId="right" type="monotone" dataKey="margin" name="淨利率(%)" stroke="#4F46E5" strokeWidth={3} dot={{ r: 4, fill: '#4F46E5', strokeWidth: 2 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div style={{ width: '100%', height: 280 }}>
-                  <ResponsiveContainer>
-                    <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                      <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}億`} />
-                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
-                      <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} />
-                      <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
-                      <Bar yAxisId="left" dataKey="revenue" name="營業收入(億)" fill="#E2E8F0" radius={[4, 4, 0, 0]} barSize={30} />
-                      <Line yAxisId="right" type="monotone" dataKey="margin" name="淨利率(%)" stroke="#4F46E5" strokeWidth={3} dot={{ r: 4, fill: '#4F46E5', strokeWidth: 2 }} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
+
+                {/* 2. 🟢 新增的 150 天相對報酬走勢圖 */}
+                {trendChartData.length > 0 && (
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800">150 天相對報酬走勢 (個股 vs 大盤)</h3>
+                        <p className="text-[10px] text-indigo-600 font-bold mt-1">Mock Engine 模擬推算</p>
+                      </div>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-mono">
+                        Normalized Base: 0%
+                      </span>
+                    </div>
+                    
+                    <div style={{ width: '100%', height: 280 }}>
+                      <ResponsiveContainer>
+                        <LineChart data={trendChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} minTickGap={30} />
+                          <YAxis tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v.toFixed(0)}%`} />
+                          
+                          <RechartsTooltip 
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }}
+                            formatter={(value: number) => [`${value.toFixed(2)}%`, '累積報酬率']}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                          
+                          <Line type="monotone" dataKey="targetReturn" name="個股報酬" stroke="#4F46E5" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="benchmarkReturn" name="大盤基準 (TAIEX)" stroke="#94A3B8" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* 右側欄位：CAGR 與決策結論 (保持不動) */}
               <div className="lg:col-span-1 space-y-6">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="text-sm font-bold text-slate-500 mb-3 tracking-widest border-b border-slate-100 pb-2">複合成長率 (CAGR)</h3>
@@ -252,6 +316,7 @@ export default function SecuritiesIndustryPage() {
                   封存並發布研究報告 (Seal)
                 </button>
               </div>
+
             </div>
           )}
 
