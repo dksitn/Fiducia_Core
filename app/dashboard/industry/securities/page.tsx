@@ -348,18 +348,31 @@ export default function SecuritiesIndustryPage() {
                     </div>
                     <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">fin_financial_fact</span>
                   </div>
-                  <div style={{ height: 260 }}>
+                  {/* 營業收入長條圖 */}
+                  <div style={{ height: 160 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={quarterChartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                      <ComposedChart data={quarterChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                        <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="left"  tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}億`} />
-                        <YAxis yAxisId="right" orientation="right" domain={[0, 'auto']} tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
-                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} />
-                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
-                        <Bar  yAxisId="left"  dataKey="revenue" name="營業收入(億)" fill="#E2E8F0" radius={[4,4,0,0]} barSize={28} />
-                        <Line yAxisId="right" type="monotone" dataKey="margin" name="淨利率(%)" stroke="#4F46E5" strokeWidth={3} dot={{ r: 4, fill: '#4F46E5', strokeWidth: 2 }} />
+                        <XAxis dataKey="period" tick={{ fontSize: 9, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}億`} />
+                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '11px' }}
+                          formatter={(v: any) => [`${v} 億`, '營業收入']} />
+                        <Bar dataKey="revenue" name="營業收入(億)" fill="#C7D2FE" radius={[3,3,0,0]} barSize={24} />
                       </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* 淨利率折線圖 */}
+                  <div style={{ height: 120 }} className="mt-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={quarterChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                        <XAxis dataKey="period" hide />
+                        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
+                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '11px' }}
+                          formatter={(v: any) => [`${v}%`, '淨利率']} />
+                        <Line type="monotone" dataKey="margin" name="淨利率(%)" stroke="#4F46E5" strokeWidth={2.5} dot={{ r: 3, fill: '#4F46E5' }} />
+                        <ReferenceLine y={0} stroke="#94A3B8" strokeDasharray="3 3" />
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
