@@ -344,7 +344,7 @@ export default function SecuritiesIndustryPage() {
                         <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
                         <RechartsTooltip 
                           contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }}
-                          formatter={(val: any, name: string, props: any) => {
+                          formatter={(val: any, name: string | undefined, props: any) => {
                             if (name === "K線") return [`開:${props.payload.open} 收:${props.payload.close} 高:${props.payload.high} 低:${props.payload.low}`, 'OHLC'];
                             return [val, name];
                           }}
