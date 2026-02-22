@@ -642,21 +642,23 @@ export async function POST(request: Request) {
     // ✅ 從「治理與放行」頁面觸發，帶入 payload
     // ==========================================
     } else if (pluginId === 'P_FIN_REPORT_VERSION_SEAL') {
-      const { companyId, period, payload } = input;
-      if (!payload || !companyId || !period) throw new Error('封存引擎缺少必要參數 (companyId, period, payload)');
-      const dqScore = payload.dq_score ?? 0;
-      if (dqScore < 80) throw new Error(`DQ 分數不足 (${dqScore}/100)，封存中止。`);
+      const { companyId, period } = input;
+      if (!companyId || !period) throw new Error('封存引擎缺少必要參數 (companyId, period)');
 
-      // ✅ fin_financial_fact 主鍵是 (company_code, period)，不是 id
+      // ✅ 用 supabaseAdmin（service role）查詢，完全繞過 RLS
+      // ✅ 不依賴前端傳入的 payload，自己從 DB 取得最新資料
       const { data: dbRecord, error: fetchErr } = await supabaseAdmin
         .from('fin_financial_fact')
-        .select('company_code, period, status')
+        .select('*')
         .eq('company_code', companyId)
         .eq('period', period)
         .maybeSingle();
       if (fetchErr || !dbRecord) throw new Error(`找不到 ${companyId}/${period} 的財報記錄`);
       if (dbRecord.status === 'VALID') throw new Error('此記錄已封存 (VALID)，禁止重複操作');
       if (dbRecord.status === 'REJECTED') throw new Error('此記錄已被拒絕 (REJECTED)，無法封存');
+
+      const dqScore = dbRecord.dq_score ?? 0;
+      if (dqScore < 80) throw new Error(`DQ 分數不足 (${dqScore}/100)，封存中止。`);
 
       auditReport = {
         source_plugin: 'P_FIN_REPORT_VERSION_SEAL',
@@ -675,20 +677,21 @@ export async function POST(request: Request) {
     // ✅ 從「治理與放行」頁面觸發，帶入 payload
     // ==========================================
     } else if (pluginId === 'P_ESG_REPORT_VERSION_SEAL') {
-      const { orgId, period, payload } = input;
-      if (!payload || !orgId || !period) throw new Error('封存引擎缺少必要參數 (orgId, period, payload)');
-      const dqScore = payload.dq_score ?? 0;
-      if (dqScore < 80) throw new Error(`DQ 分數不足 (${dqScore}/100)，封存中止`);
+      const { orgId, period } = input;
+      if (!orgId || !period) throw new Error('封存引擎缺少必要參數 (orgId, period)');
 
-      // ✅ esg_metrics 主鍵是 (company_code, period)，不是 id
+      // ✅ 用 supabaseAdmin（service role）查詢，完全繞過 RLS
       const { data: dbRecord, error: fetchErr } = await supabaseAdmin
         .from('esg_metrics')
-        .select('company_code, period, status')
+        .select('*')
         .eq('company_code', orgId)
         .eq('period', period)
         .maybeSingle();
       if (fetchErr || !dbRecord) throw new Error(`找不到 ${orgId}/${period} 的 ESG 記錄`);
       if (dbRecord.status === 'VALID') throw new Error('此 ESG 記錄已封存 (VALID)，禁止重複操作');
+
+      const dqScore = dbRecord.dq_score ?? 0;
+      if (dqScore < 80) throw new Error(`DQ 分數不足 (${dqScore}/100)，封存中止`);
 
       auditReport = {
         source_plugin: 'P_ESG_REPORT_VERSION_SEAL',
@@ -743,6 +746,9 @@ export async function POST(request: Request) {
     // ==========================================
     // 💡 不可篡改證據鏈封存 (Immutability Loop)
     // ==========================================
+    // ✅ 加入 timestamp 確保每次 fingerprint 唯一，防止 unique constraint 衝突
+    auditReport._sealed_at = new Date().toISOString();
+    auditReport._nonce = crypto.randomUUID();
     const reportContent = JSON.stringify(auditReport);
     const msgUint8 = new TextEncoder().encode(reportContent);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
@@ -763,7 +769,7 @@ export async function POST(request: Request) {
 
     const { data: evidenceItem, error: itemError } = await supabaseAdmin
       .from('sys_evidence_items')
-      .insert({
+      .upsert({
         state_version_id: version.id,
         type: 'DIAGNOSTIC_REPORT',
         evidence_type: 'DIAGNOSTIC_REPORT',
@@ -772,7 +778,7 @@ export async function POST(request: Request) {
         sha256: actualFingerprint,
         storage_path: storagePath,
         created_by_user_id: actorUserId
-      })
+      }, { onConflict: 'fingerprint', ignoreDuplicates: false })
       .select('id').single();
 
     if (itemError || !evidenceItem) {
