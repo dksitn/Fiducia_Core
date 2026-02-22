@@ -287,7 +287,7 @@ export default function FHCIndustryPage() {
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                           <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
                           <YAxis tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}億`} width={55} />
-                          <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} formatter={(v: any, name: string) => [`${Number(v).toFixed(2)} 億`, name]} />
+                          <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} formatter={(v: any, name?: string) => [`${Number(v).toFixed(2)} 億`, name ?? ""]} />
                           <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
                           <Bar dataKey="revenue" name="營業收入(億)" fill="#E2E8F0" radius={[4, 4, 0, 0]} barSize={20} />
                           <Line dataKey="net_income" name="稅後淨利(億)" stroke="#10B981" strokeWidth={3} dot={{ r: 4, fill: '#10B981', stroke: '#fff', strokeWidth: 2 }} />
@@ -380,7 +380,7 @@ export default function FHCIndustryPage() {
                         <YAxis dataKey="company_code" type="category" tick={{ fontSize: 10, fill: '#334155', fontWeight: 'bold' }} axisLine={false} tickLine={false} width={55} />
                         <RechartsTooltip
                           contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '11px' }}
-                          formatter={(v: any, name: string) => [`${Number(v).toLocaleString()} tCO₂e`, name]}
+                          formatter={(v: any, name?: string) => [`${Number(v).toLocaleString()} tCO₂e`, name ?? ""]}
                           labelFormatter={label => `${label} · ${allEsgData.find(d => d.company_code === label)?.period ?? ''}`}
                         />
                         <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} />
