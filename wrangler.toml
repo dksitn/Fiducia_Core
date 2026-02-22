@@ -1,0 +1,11 @@
+name = "fiducia-core"
+compatibility_date = "2024-01-01"
+
+# 凌晨 2:00 台灣時間 = UTC 18:00（台灣是 UTC+8）
+[triggers]
+crons = ["0 18 * * *"]
+
+# Cron 觸發時執行的 Worker 腳本
+[[cron_triggers]]
+cron = "0 18 * * *"
+# 這個 Worker 會打你的 Next.js Cron API

@@ -50,6 +50,8 @@ function Sidebar() {
         <div className="pb-4">
           <p className="px-4 text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">產業垂直視覺化</p>
           <Link href="/dashboard/industry/bank" className={getLinkClass('/dashboard/industry/bank')}>🏦 銀行業 (金企授信)</Link>
+          {/* 🚀 補上漏掉的金控組合 */}
+          <Link href="/dashboard/industry/fhc" className={getLinkClass('/dashboard/industry/fhc')}>🏢 金融業 (金控組合)</Link>
           <Link href="/dashboard/industry/securities" className={getLinkClass('/dashboard/industry/securities')}>📈 證券業 (自營風控)</Link>
         </div>
       </nav>
