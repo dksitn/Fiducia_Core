@@ -165,18 +165,38 @@ export async function POST(request: Request) {
           const q = parseInt(period.slice(-1));
           const seasonal = q === 1 ? 0.82 : q === 2 ? 0.94 : q === 3 ? 1.03 : 1.21;
 
+          const rev    = Math.round(baseRevenue   * growthRatio * seasonal);
+          const ni     = Math.round(baseNetIncome * growthRatio * seasonal);
+          const assets = Math.round(baseAssets    * growthRatio);
+          const liab   = Math.round(baseLiab      * growthRatio);
+          const eq     = Math.round(baseEquity     * growthRatio);
+          const ocf    = Math.round(ni * 1.15);
+          const capex  = Math.round(ni * 0.38);
+
           const rec = {
             company_code:        companyCode,
             period,
-            revenue:             Math.round(baseRevenue   * growthRatio * seasonal),
-            net_income:          Math.round(baseNetIncome * growthRatio * seasonal),
-            total_assets:        Math.round(baseAssets    * growthRatio),
-            total_liabilities:   Math.round(baseLiab      * growthRatio),
-            equity:              Math.round(baseEquity     * growthRatio),
-            operating_cash_flow: Math.round(baseNetIncome * growthRatio * seasonal * 1.15),
-            capital_expenditure: Math.round(baseNetIncome * growthRatio * seasonal * 0.38),
+            revenue:             rev,
+            net_income:          ni,
+            total_assets:        assets,
+            // total_liabilities 不在 schema 中，放入 metrics jsonb
+            equity:              eq,
+            operating_cash_flow: ocf,
+            capital_expenditure: capex,
             dq_score:            dqScore,
             status:              'DRAFT',
+            // ✅ metrics NOT NULL 欄位：將所有財務數字（含 liabilities）打包為 jsonb
+            metrics: {
+              revenue:             rev,
+              net_income:          ni,
+              total_assets:        assets,
+              total_liabilities:   liab,
+              equity:              eq,
+              operating_cash_flow: ocf,
+              capital_expenditure: capex,
+              data_source:         dataSource,
+              period,
+            },
           };
           allRecs.push(rec);
           if (i === PERIODS.length - 1) latestMetrics = rec;
