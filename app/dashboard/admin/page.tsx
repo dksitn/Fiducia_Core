@@ -285,56 +285,222 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* ── ✅ 3. 保留完整的 Plugin 控制台 ── */}
+      {/* ── Plugin 控制台（分層 + 行業標記 + API 說明）── */}
       <div className="mb-8 w-full bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        <div className="mb-4 flex justify-between items-end border-b border-slate-100 pb-3">
+        <div className="mb-5 flex justify-between items-end border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-              ⚙️ 零信任資料管線 (L1 ~ L3)
+              ⚙️ 零信任資料管線 (L1 → L2 → L3)
             </h3>
             <p className="text-[10px] text-slate-500 mt-1">
-              L1 負責時序/事件，L2 負責財報/永續快照，L3 負責封存與證券風控報告。
+              L1 時序事件同步 → L2 財報/永續快照 → L3 封存簽章 → 行業分析引擎
             </p>
           </div>
-          {/* 權限標籤 */}
           {!isSuperAdmin && (
             <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
-              🔒 執行功能需 Admin 權限
+              🔒 執行功能需 System Admin 權限
             </span>
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {visiblePlugins.map(p => {
-            const ui = getPluginUIInfo(p.plugin_id);
-            const isRunning = isRunningPlugin === p.plugin_id;
+        {(() => {
+          // ── Plugin 完整定義（含行業標記 + API 資料說明）────────────
+          const PIPELINE_GROUPS: {
+            layer: string;
+            layerLabel: string;
+            color: string;
+            bgColor: string;
+            borderColor: string;
+            plugins: {
+              pluginId: string;
+              icon: string;
+              title: string;
+              btnText: string;
+              themeColor: string;
+              industry: string;
+              apiSource: string;
+              dataDesc: string;
+            }[];
+          }[] = [
+            {
+              layer: '第一層', layerLabel: '第一層：時序同步（每日自動抓取）',
+              color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200',
+              plugins: [
+                {
+                  pluginId: 'L1_MARKET_DAILY_SYNC', icon: '📈', title: '每日市場行情',
+                  btnText: '同步行情', themeColor: '#D97706',
+                  industry: '全行業通用',
+                  apiSource: '證交所 STOCK_DAY_ALL',
+                  dataDesc: '10 家企業每日開盤/最高/最低/收盤價、成交量、成交值，寫入市場行情序列表'
+                },
+                {
+                  pluginId: 'L1_MATERIAL_EVENTS_SYNC', icon: '📢', title: '重大訊息與裁罰',
+                  btnText: '同步事件', themeColor: '#DC2626',
+                  industry: '全行業通用',
+                  apiSource: '證交所 t187ap06_L',
+                  dataDesc: '上市公司重大訊息公告、主管機關裁罰、法遵異動紀錄（只增不改）'
+                },
+                {
+                  pluginId: 'L1_INDUSTRY_SYNC', icon: '🏭', title: '產業分類維度',
+                  btnText: '同步產業', themeColor: '#0891B2',
+                  industry: '全行業通用',
+                  apiSource: '證交所 t187ap03_L',
+                  dataDesc: '行業別、子產業別，採緩慢變動維度設計，歷史分類可追溯'
+                },
+                {
+                  pluginId: 'L1_INSIDER_HOLDINGS_SYNC', icon: '🕵️', title: '董監事持股異動',
+                  btnText: '同步籌碼', themeColor: '#7C3AED',
+                  industry: '全行業通用',
+                  apiSource: '證交所 t187ap07_L',
+                  dataDesc: '董監事持股增減股數、異動後持股比例、異動日期（只增不改）'
+                },
+                {
+                  pluginId: 'L1_DIVIDENDS_SYNC', icon: '💰', title: '股利與除權息',
+                  btnText: '同步股利', themeColor: '#D946EF',
+                  industry: '全行業通用',
+                  apiSource: '證交所 t187ap08_L',
+                  dataDesc: '現金股利、股票股利每股金額、除息交易日、現金股利發放日（只增不改）'
+                },
+              ]
+            },
+            {
+              layer: '第二層', layerLabel: '第二層：官方財報與永續快照（季度/年度抓取）',
+              color: 'text-slate-700', bgColor: 'bg-slate-50', borderColor: 'border-slate-200',
+              plugins: [
+                {
+                  pluginId: 'TW_FUNDAMENTAL_SYNC', icon: '🏛️', title: '官方財務報表同步',
+                  btnText: '執行抓取', themeColor: '#475569',
+                  industry: '全行業通用',
+                  apiSource: '證交所 t187ap14_L（綜合損益表）＋ t187ap03_L（資產負債表）',
+                  dataDesc: '營業收入、本期淨利、資產總計、負債總計、權益總計，推算 12 季歷史軌跡，寫入財務事實表（草稿待審）'
+                },
+                {
+                  pluginId: 'ESG_METRICS_SYNC', icon: '🌱', title: '永續碳排報告同步',
+                  btnText: '執行同步', themeColor: '#16A34A',
+                  industry: '全行業通用',
+                  apiSource: '證交所 t187ap15_L（無資料時改用行業基準估算）',
+                  dataDesc: '範疇一直接排放、範疇二間接排放（噸二氧化碳當量）、確信等級，三年軌跡，寫入永續指標表（草稿待審）'
+                },
+              ]
+            },
+            {
+              layer: '第三層', layerLabel: '第三層：數位簽章封存（治理放行後執行）',
+              color: 'text-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200',
+              plugins: [
+                {
+                  pluginId: 'P_FIN_REPORT_VERSION_SEAL', icon: '🏦', title: '財務報表封存',
+                  btnText: '執行封存', themeColor: '#4F46E5',
+                  industry: '全行業通用',
+                  apiSource: '資料庫 財務事實表（草稿狀態）',
+                  dataDesc: '資料品質分數驗證（需達 80 分）→ 計算 SHA-256 數位指紋 → 狀態升為正式有效 → 寫入不可篡改證據鏈'
+                },
+                {
+                  pluginId: 'P_ESG_REPORT_VERSION_SEAL', icon: '🌿', title: '永續報告封存',
+                  btnText: '執行封存', themeColor: '#059669',
+                  industry: '全行業通用',
+                  apiSource: '資料庫 永續指標表（草稿狀態）',
+                  dataDesc: '資料品質分數驗證（需達 80 分）→ 計算 SHA-256 數位指紋 → 狀態升為正式有效 → 永續連結貸款條件上鏈存證'
+                },
+              ]
+            },
+            {
+              layer: '行業引擎', layerLabel: '行業引擎：證券業自營部門（自營風控專用）',
+              color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200',
+              plugins: [
+                {
+                  pluginId: 'P_SEC_PM_DECISION_ENGINE', icon: '📊', title: '自營部門投資決策引擎',
+                  btnText: '執行運算', themeColor: '#2563EB',
+                  industry: '證券業自營部門專用',
+                  apiSource: '資料庫 財務事實表＋市場行情表（正式有效資料）',
+                  dataDesc: '讀取已放行財報計算現金流量品質比（現金流量／淨利）、負債比率、營收季增率，輸出買進／觀望／減碼操作建議'
+                },
+              ]
+            },
+            {
+              layer: '系統防禦', layerLabel: '系統防禦：基礎設施安全掃描',
+              color: 'text-rose-700', bgColor: 'bg-rose-50', borderColor: 'border-rose-200',
+              plugins: [
+                {
+                  pluginId: 'CVE_TRACK', icon: '🛡️', title: '軟體供應鏈弱點掃描',
+                  btnText: '執行掃描', themeColor: '#E11D48',
+                  industry: '系統基礎設施',
+                  apiSource: 'Google 開源弱點資料庫（osv.dev）',
+                  dataDesc: '掃描 Next.js 套件已知資安漏洞清單、嚴重等級、公告日期，結果寫入不可篡改證據鏈'
+                },
+                {
+                  pluginId: 'DB_SCHEMA_DRIFT', icon: '💾', title: '資料庫結構防篡改快照',
+                  btnText: '擷取快照', themeColor: '#0284C7',
+                  industry: '系統基礎設施',
+                  apiSource: '資料庫內部查詢（資訊結構表）',
+                  dataDesc: '拍下所有資料表的欄位名稱與型態快照，日後可與當前結構比對，偵測未授權的資料庫結構變更'
+                },
+              ]
+            },
+          ];
+
+          const PluginCard = ({ p }: { p: typeof PIPELINE_GROUPS[0]['plugins'][0] }) => {
+            const isRunning = isRunningPlugin === p.pluginId;
             const canRun = isSuperAdmin && !isRunning && isRunningPlugin === null;
+            const found = visiblePlugins.find(vp => vp.plugin_id === p.pluginId);
+            if (!found) return null;
             return (
-              <div key={p.id} className="flex flex-col justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 gap-2 min-w-0">
+              <div className="flex flex-col justify-between p-3 bg-white rounded-xl border border-slate-200 gap-2 min-w-0 shadow-sm">
                 <div className="flex gap-2 items-start">
-                  <div className="text-xl mt-0.5 shrink-0">{ui.icon}</div>
-                  <div className="min-w-0">
-                    <p className="font-black text-[11px] text-slate-800 mb-0.5 leading-tight truncate" title={ui.title}>{ui.title}</p>
-                    <p className="text-[9px] text-slate-500 leading-snug font-bold line-clamp-2">{ui.desc}</p>
+                  <div className="text-lg mt-0.5 shrink-0">{p.icon}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                      <p className="font-black text-[11px] text-slate-800 leading-tight">{p.title}</p>
+                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                        p.industry === '證券業自營部門專用' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                        p.industry === '系統基礎設施' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
+                        'bg-slate-100 text-slate-500 border border-slate-200'
+                      }`}>{p.industry}</span>
+                    </div>
+                    <p className="text-[9px] text-indigo-600 font-bold leading-snug mb-1">
+                      API: {p.apiSource}
+                    </p>
+                    <p className="text-[9px] text-slate-500 leading-snug font-medium line-clamp-2">
+                      {p.dataDesc}
+                    </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => canRun && handleRunPlugin(p.plugin_id)}
+                  onClick={() => canRun && handleRunPlugin(p.pluginId)}
                   disabled={!canRun}
                   style={{
-                    backgroundColor: !isSuperAdmin ? '#e2e8f0' : isRunning ? '#cbd5e1' : ui.themeColor,
+                    backgroundColor: !isSuperAdmin ? '#e2e8f0' : isRunning ? '#cbd5e1' : p.themeColor,
                     color: !isSuperAdmin ? '#94a3b8' : isRunning ? '#475569' : '#ffffff'
                   }}
-                  className={`px-3 py-1.5 text-[9px] font-black rounded-lg transition-all shadow-sm w-full border border-transparent truncate
+                  className={`px-3 py-1.5 text-[9px] font-black rounded-lg transition-all shadow-sm w-full border border-transparent
                     ${canRun ? 'hover:brightness-110 cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
                   title={!isSuperAdmin ? '需要 System Admin 權限' : undefined}
                 >
-                  {isRunning ? '執行中...' : !isSuperAdmin ? '🔒 ' + ui.btnText : ui.btnText}
+                  {isRunning ? '⏳ 執行中...' : !isSuperAdmin ? '🔒 ' + p.btnText : p.btnText}
                 </button>
               </div>
             );
-          })}
-        </div>
+          };
+
+          return (
+            <div className="space-y-5">
+              {PIPELINE_GROUPS.map(group => (
+                <div key={group.layer}>
+                  {/* 層級標頭 */}
+                  <div className={`flex items-center gap-2 mb-3 pb-2 border-b ${group.borderColor}`}>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${group.bgColor} ${group.color} border ${group.borderColor}`}>
+                      {group.layer}
+                    </span>
+                    <span className={`text-xs font-black ${group.color}`}>{group.layerLabel}</span>
+                  </div>
+                  {/* Plugin 卡片 */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                    {group.plugins.map(p => <PluginCard key={p.pluginId} p={p} />)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* PDF 浮動視窗 */}
@@ -412,16 +578,12 @@ export default function AdminPage() {
                               {ev.status === 'VALID' ? '✅ 已入庫' : '✓ 核決'}
                             </button>
 
-                            {/* 重跑按鈕：僅 superadmin 可用 */}
-                            {pluginToRun && (
+                            {/* 重跑按鈕：僅 VALID 以外狀態 + superadmin 才顯示 */}
+                            {pluginToRun && ev.status !== 'VALID' && isSuperAdmin && (
                               <button
-                                onClick={() => isSuperAdmin && handleRunPlugin(pluginToRun)}
-                                disabled={isRunningPlugin !== null || !isSuperAdmin}
-                                className={`px-2 py-1 border text-[10px] font-bold rounded transition-colors shadow-sm
-                                  ${isSuperAdmin
-                                    ? 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 disabled:opacity-50'
-                                    : 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
-                                  }`}
+                                onClick={() => handleRunPlugin(pluginToRun)}
+                                disabled={isRunningPlugin !== null}
+                                className="px-2 py-1 border text-[10px] font-bold rounded transition-colors shadow-sm bg-white border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 disabled:opacity-50"
                               >
                                 {isRunningPlugin === pluginToRun ? '⏳...' : '🔄 執行'}
                               </button>
