@@ -129,12 +129,12 @@ export async function POST(request: Request) {
       let incData: any[] = [], balData: any[] = [];
       try {
         const [incRes, balRes] = await Promise.all([
-          fetch('https://openapi.twse.com.tw/v1/opendata/t187ap14_L', { signal: AbortSignal.timeout(15000) }),
-          fetch('https://openapi.twse.com.tw/v1/opendata/t187ap03_L', { signal: AbortSignal.timeout(15000) }),
+          fetch('https://openapi.twse.com.tw/v1/opendata/t187ap14_L'),
+          fetch('https://openapi.twse.com.tw/v1/opendata/t187ap03_L'),
         ]);
         if (incRes.ok) incData = await incRes.json();
         if (balRes.ok) balData = await balRes.json();
-      } catch (_) { /* API 失敗：incData/balData 保持空陣列，下方 fallback 接手 */ }
+      } catch (_) { /* API 失敗：fallback 接手 */ }
 
       for (const companyCode of TARGET_COMPANIES) {
         const compInc = (Array.isArray(incData) ? incData : []).find((d: any) => String(d['公司代號'] ?? '').trim() === companyCode) || {};
@@ -225,12 +225,9 @@ export async function POST(request: Request) {
       // ✅ API 失敗不 throw，直接用 fallback 繼續
       let esgRaw: any[] = [];
       try {
-        const esgRes = await fetch(
-          'https://openapi.twse.com.tw/v1/opendata/t187ap15_L',
-          { signal: AbortSignal.timeout(10000) }
-        );
+        const esgRes = await fetch('https://openapi.twse.com.tw/v1/opendata/t187ap15_L');
         if (esgRes.ok) esgRaw = await esgRes.json();
-      } catch (_) { /* API 失敗：大多數公司本來就沒資料，繼續用 ESG_BASE */ }
+      } catch (_) { /* API 失敗：繼續用 ESG_BASE */ }
 
       const cleanNum = (val: any) => {
         const n = parseFloat(String(val ?? '0').replace(/,/g, ''));
@@ -312,10 +309,7 @@ export async function POST(request: Request) {
       const findings: any[] = [];
 
       try {
-        const mktRes = await fetch(
-          'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
-          { signal: AbortSignal.timeout(15000) }
-        );
+        const mktRes = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
         if (!mktRes.ok) throw new Error(`市場行情 API 連線失敗，狀態碼: ${mktRes.status}`);
         const mktRaw = await mktRes.json();
 
@@ -384,10 +378,7 @@ export async function POST(request: Request) {
       const findings: any[] = [];
 
       try {
-        const evtRes = await fetch(
-          'https://openapi.twse.com.tw/v1/opendata/t187ap06_L',
-          { signal: AbortSignal.timeout(15000) }
-        );
+        const evtRes = await fetch('https://openapi.twse.com.tw/v1/opendata/t187ap06_L');
         if (!evtRes.ok) throw new Error(`重大事件 API 連線失敗，狀態碼: ${evtRes.status}`);
         const evtRaw = await evtRes.json();
 
@@ -449,10 +440,7 @@ export async function POST(request: Request) {
       const findings: any[] = [];
 
       try {
-        const indRes = await fetch(
-          'https://openapi.twse.com.tw/v1/opendata/t187ap03_L',
-          { signal: AbortSignal.timeout(15000) }
-        );
+        const indRes = await fetch('https://openapi.twse.com.tw/v1/opendata/t187ap03_L');
         const indRaw = indRes.ok ? await indRes.json() : [];
         const today = new Date().toISOString().split('T')[0];
 
@@ -509,10 +497,7 @@ export async function POST(request: Request) {
 
       try {
         // ✅ 正確端點：t187ap07_L 董監事持股彙總表
-        const holdRes = await fetch(
-          'https://openapi.twse.com.tw/v1/opendata/t187ap07_L',
-          { signal: AbortSignal.timeout(15000) }
-        );
+        const holdRes = await fetch('https://openapi.twse.com.tw/v1/opendata/t187ap07_L');
         if (!holdRes.ok) throw new Error(`董監持股 API 連線失敗，狀態碼: ${holdRes.status}`);
         const holdRaw = await holdRes.json();
 
@@ -585,7 +570,7 @@ export async function POST(request: Request) {
       try {
         // ✅ 正確端點：t187ap08_L 股利分派情形
         const apiUrl = 'https://openapi.twse.com.tw/v1/opendata/t187ap08_L';
-        const response = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
+        const response = await fetch(apiUrl);
         if (!response.ok) throw new Error(`股利 API 連線失敗，狀態碼: ${response.status}`);
         const rawData = await response.json();
         if (!Array.isArray(rawData)) throw new Error('API 回傳格式不符預期，應為陣列');
