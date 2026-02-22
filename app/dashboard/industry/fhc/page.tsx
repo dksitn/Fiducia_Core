@@ -141,7 +141,7 @@ export default function FHCIndustryPage() {
     { id: 'COMMAND',    label: '集團總覽',       icon: '🏛️' },
     { id: 'DRILLDOWN',  label: '子公司穿透',     icon: '🔬' },
     { id: 'ESG',        label: 'ESG 投融資排放', icon: '🌿' },
-    { id: 'GOVERNANCE', label: '資料血緣與品質',  icon: '🔬' },
+    { id: 'GOVERNANCE', label: '治理稽核',        icon: '🔒' },
   ];
 
   const trendData = finData.map(r => ({
@@ -358,32 +358,6 @@ export default function FHCIndustryPage() {
           {/* ── ESG 上市公司碳排比較 ── */}
           {activeTab === 'ESG' && (
             <div className="space-y-6">
-              {/* 頂部說明 + 當前金控碳排 KPI */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                  <p className="text-xs font-bold text-slate-400 mb-1">範疇一排放</p>
-                  <p className="text-2xl font-black text-amber-600">{latestEsg?.scope1_tco2e != null ? `${latestEsg.scope1_tco2e.toLocaleString()}` : 'N/A'}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">tCO₂e · {latestEsg?.period ?? '—'}</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                  <p className="text-xs font-bold text-slate-400 mb-1">範疇二排放</p>
-                  <p className="text-2xl font-black text-blue-600">{latestEsg?.scope2_tco2e != null ? `${latestEsg.scope2_tco2e.toLocaleString()}` : 'N/A'}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">tCO₂e · {latestEsg?.period ?? '—'}</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                  <p className="text-xs font-bold text-slate-400 mb-1">確信等級</p>
-                  <p className={`text-2xl font-black ${latestEsg?.assurance_level === 'High' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {latestEsg?.assurance_level ?? 'N/A'}
-                  </p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">第三方確信</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                  <p className="text-xs font-bold text-slate-400 mb-1">系統覆蓋公司數</p>
-                  <p className="text-2xl font-black text-indigo-600">{allEsgData.length}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">有效 ESG 記錄</p>
-                </div>
-              </div>
-
               {/* 跨公司碳排橫向比較 */}
               {allEsgData.length > 0 ? (
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -396,15 +370,45 @@ export default function FHCIndustryPage() {
                   </div>
                   <div style={{ height: Math.max(220, allEsgData.length * 42) }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={allEsgData} layout="vertical" margin={{ top: 0, right: 80, left: 60, bottom: 0 }}>
+                      <BarChart data={allEsgData} layout="vertical" margin={{ top: 0, right: 80, left: 10, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
                         <XAxis type="number" tick={{ fontSize: 9, fill: '#64748B' }} axisLine={false} tickLine={false}
                           tickFormatter={v => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v/1_000).toFixed(0)}K` : String(v)} />
-                        <YAxis dataKey="company_code" type="category" tick={{ fontSize: 10, fill: '#334155', fontWeight: 'bold' }} axisLine={false} tickLine={false} width={55} />
+                        <YAxis
+                          dataKey="company_code"
+                          type="category"
+                          axisLine={false}
+                          tickLine={false}
+                          width={140}
+                          tick={(props: any) => {
+                            const { x, y, payload } = props;
+                            const nameMap: Record<string, string> = {
+                              '2330': '台積電', '2317': '鴻海', '2454': '聯發科',
+                              '2881': '富邦金', '2882': '國泰金', '2891': '中信金',
+                              '1301': '台塑',   '2002': '中鋼',   '1216': '統一',
+                              '2308': '台達電',
+                            };
+                            return (
+                              <text x={x} y={y} textAnchor="end" dominantBaseline="middle">
+                                <tspan fontSize={10} fontWeight="bold" fill="#334155">{payload.value}</tspan>
+                                <tspan fontSize={10} fill="#64748B" dx={4}>{nameMap[payload.value] ?? ''}</tspan>
+                              </text>
+                            );
+                          }}
+                        />
                         <RechartsTooltip
                           contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '11px' }}
                           formatter={(v: any, name?: string) => [`${Number(v).toLocaleString()} tCO₂e`, name ?? ""]}
-                          labelFormatter={label => `${label} · ${allEsgData.find(d => d.company_code === label)?.period ?? ''}`}
+                          labelFormatter={(label) => {
+                            const nameMap: Record<string, string> = {
+                              '2330': '台積電', '2317': '鴻海', '2454': '聯發科',
+                              '2881': '富邦金', '2882': '國泰金', '2891': '中信金',
+                              '1301': '台塑',   '2002': '中鋼',   '1216': '統一',
+                              '2308': '台達電',
+                            };
+                            const d = allEsgData.find(d => d.company_code === label);
+                            return `${label} ${nameMap[label] ?? ''} · ${d?.period ?? ''}`;
+                          }}
                         />
                         <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} />
                         <Bar dataKey="scope1" name="範疇一" stackId="a" fill="#F59E0B" radius={[0,0,0,0]} barSize={20} />
@@ -494,155 +498,73 @@ export default function FHCIndustryPage() {
             </div>
           )}
 
-          {/* ── 資料血緣與品質 ── */}
+          {/* ── 治理稽核 ── */}
           {activeTab === 'GOVERNANCE' && (
-            <div className="space-y-6">
-
-              {/* 快照卡片 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                {/* 財務報表快照 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-5">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
-                    <h3 className="text-sm font-bold text-slate-800">📊 財務報表快照</h3>
-                    <span className={`text-[10px] px-2 py-1 rounded font-black border ${latestFin ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                      {latestFin ? 'VALID' : 'PENDING'}
-                    </span>
-                  </div>
-                  <div className="space-y-2.5 text-xs">
-                    {[
-                      { label: '快照識別碼',  value: `FIN_${selectedCompany}_${latestFin?.period ?? '—'}`, mono: true },
-                      { label: '最新期間',    value: latestFin?.period ?? 'N/A', mono: true },
-                      { label: 'DQ 品質分數', value: `${latestFin?.dq_score ?? 'N/A'} / 100`, highlight: true, score: latestFin?.dq_score },
-                      { label: '資料來源',    value: 'TWSE OpenAPI (t187ap14_L + t187ap03_L)', mono: true },
-                      { label: '封存引擎',    value: 'P_FIN_REPORT_VERSION_SEAL', mono: true },
-                    ].map(row => (
-                      <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-slate-50 gap-4">
-                        <span className="text-slate-500 font-bold shrink-0">{row.label}</span>
-                        <span className={`text-right truncate ${row.mono ? 'font-mono text-slate-700' : ''} ${row.highlight ? ((row.score ?? 0) >= 90 ? 'font-black text-emerald-600' : 'font-black text-amber-600') : ''}`}>
-                          {row.value}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="pt-2">
-                      <p className="text-slate-400 font-bold mb-2">原始資料源</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {['SRC_TWSE_OPENAPI_INC', 'SRC_TWSE_OPENAPI_BAL', 'SRC_MOPS_FS'].map(tag => (
-                          <span key={tag} className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded font-mono font-bold">{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ESG 永續報告快照 */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
-                    <h3 className="text-sm font-bold text-slate-800">🌱 永續報告快照</h3>
-                    <span className={`text-[10px] px-2 py-1 rounded font-black border ${latestEsg ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                      {latestEsg ? 'VALID' : 'PENDING'}
-                    </span>
-                  </div>
-                  <div className="space-y-2.5 text-xs">
-                    {[
-                      { label: '快照識別碼',  value: `ESG_${selectedCompany}_${latestEsg?.period ?? '—'}`, mono: true },
-                      { label: '最新年度',    value: latestEsg?.period ?? 'N/A', mono: true },
-                      { label: 'DQ 品質分數', value: `${latestEsg?.dq_score ?? 'N/A'} / 100`, highlight: true, score: latestEsg?.dq_score },
-                      { label: '確信等級',    value: latestEsg?.assurance_level ?? 'N/A', mono: false },
-                      { label: '資料來源',    value: latestEsg?.data_source === 'TWSE_OPENAPI' ? 'TWSE t187ap15_L' : '行業基準估算', mono: true },
-                      { label: '封存引擎',    value: 'P_ESG_REPORT_VERSION_SEAL', mono: true },
-                    ].map(row => (
-                      <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-slate-50 gap-4">
-                        <span className="text-slate-500 font-bold shrink-0">{row.label}</span>
-                        <span className={`text-right truncate ${row.mono ? 'font-mono text-slate-700' : ''} ${row.highlight ? ((row.score ?? 0) >= 90 ? 'font-black text-emerald-600' : 'font-black text-amber-600') : ''}`}>
-                          {row.value}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="pt-2">
-                      <p className="text-slate-400 font-bold mb-2">原始資料源</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {['SRC_SUS_REPORT_PDF', 'SRC_ESG_SCORE', 'SRC_FINANCED_EMISSIONS'].map(tag => (
-                          <span key={tag} className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded font-mono font-bold">{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 證據覆蓋健康度 + Immutable Chain */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-4">
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 className="text-sm font-bold text-slate-500 mb-4 border-b border-slate-100 pb-2">證據覆蓋與健康度</h3>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-xs font-bold text-slate-600 mb-1">系統封存證據筆數</p>
-                        <p className="text-3xl font-black text-emerald-600">{evidences.length} 筆</p>
-                        <p className="text-[9px] text-slate-400 font-mono mt-1">sys_evidence_items</p>
-                      </div>
-                      <div className="pt-3 border-t border-slate-100">
-                        <p className="text-xs font-bold text-slate-600 mb-1">財報最新季度</p>
-                        <p className="text-lg font-black text-slate-800">{latestFin?.period ?? 'N/A'}</p>
-                      </div>
-                      <div className="pt-3 border-t border-slate-100">
-                        <p className="text-xs font-bold text-slate-600 mb-1">ESG 最新年度</p>
-                        <p className="text-lg font-black text-slate-800">{latestEsg?.period ?? 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-teal-50 p-5 rounded-2xl border border-teal-200 shadow-sm flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-500 mb-4 border-b border-slate-100 pb-2">證據覆蓋與健康度</h3>
+                  <div className="space-y-4">
                     <div>
-                      <p className="text-xs font-bold text-teal-800 mb-1">資料庫 Schema 異動警示</p>
-                      <p className="text-sm font-bold text-teal-700">無底層結構篡改</p>
+                      <p className="text-xs font-bold text-slate-600 mb-1">系統封存證據筆數</p>
+                      <p className="text-3xl font-black text-emerald-600">{evidences.length} 筆</p>
+                      <p className="text-[9px] text-slate-400 font-mono mt-1">sys_evidence_items</p>
                     </div>
-                    <div className="text-3xl font-black text-teal-600">0</div>
+                    <div className="pt-3 border-t border-slate-100">
+                      <p className="text-xs font-bold text-slate-600 mb-1">財報最新季度</p>
+                      <p className="text-lg font-black text-slate-800">{latestFin?.period ?? 'N/A'}</p>
+                    </div>
+                    <div className="pt-3 border-t border-slate-100">
+                      <p className="text-xs font-bold text-slate-600 mb-1">ESG 最新年度</p>
+                      <p className="text-lg font-black text-slate-800">{latestEsg?.period ?? 'N/A'}</p>
+                    </div>
                   </div>
                 </div>
-
-                {/* Immutable Chain */}
-                <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
-                    <h3 className="text-sm font-bold text-slate-800">🔗 不可篡改存證追溯 (Immutable Chain)</h3>
-                    <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">Source: sys_evidence_items</span>
+                <div className="bg-teal-50 p-5 rounded-2xl border border-teal-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-teal-800 mb-1">資料庫 Schema 異動警示</p>
+                    <p className="text-sm font-bold text-teal-700">無底層結構篡改</p>
                   </div>
-                  {evidences.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-10">尚無封存記錄</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {evidences.map((ev: any, i: number) => {
-                        const summary = ev.sys_state_versions?.summary ?? '封存操作';
-                        const sha = (ev.sha256 ?? ev.fingerprint ?? '').substring(0, 16);
-                        const path = ev.storage_path
-                          ? ev.storage_path.split('/').pop()?.substring(0, 36) + '...'
-                          : '—';
-                        return (
-                          <div key={i} className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">
-                              {i + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <p className="text-xs font-mono text-slate-600 truncate">{path}</p>
-                                <span className="text-[10px] px-2 py-0.5 rounded font-black bg-emerald-100 text-emerald-700 shrink-0">VALID</span>
-                              </div>
-                              <p className="text-[11px] text-slate-500 font-medium mb-1">{summary}</p>
-                              <p className="text-[10px] font-mono text-slate-300">SHA: {sha}...</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="mt-4 flex justify-end">
-                    <a href="/dashboard/traceability" className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg shadow hover:bg-slate-50">
-                      開啟追溯查詢（全局搜索）
-                    </a>
-                  </div>
+                  <div className="text-3xl font-black text-teal-600">0</div>
                 </div>
               </div>
-
+              <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+                  <h3 className="text-sm font-bold text-slate-800">封存日誌與例外放行記錄</h3>
+                  <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">sys_evidence_items + sys_state_versions</span>
+                </div>
+                {evidences.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-10">尚無封存記錄</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 font-bold">
+                        <tr>
+                          <th className="px-3 py-2 rounded-l-lg">時間</th>
+                          <th className="px-3 py-2">操作摘要</th>
+                          <th className="px-3 py-2">類型</th>
+                          <th className="px-3 py-2 rounded-r-lg">狀態</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {evidences.map((ev: any, i: number) => (
+                          <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
+                            <td className="px-3 py-3 font-mono text-slate-400 text-[10px] whitespace-nowrap">{new Date(ev.created_at).toLocaleString('zh-TW')}</td>
+                            <td className="px-3 py-3 font-bold text-slate-700 max-w-xs truncate">{ev.sys_state_versions?.summary ?? '封存操作'}</td>
+                            <td className="px-3 py-3"><span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-mono text-[9px]">{ev.type ?? 'EVIDENCE'}</span></td>
+                            <td className="px-3 py-3"><span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-bold text-[9px]">VALID</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="mt-4 flex justify-end">
+                  <a href="/dashboard/traceability" className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg shadow hover:bg-slate-50">
+                    開啟追溯查詢（全局搜索）
+                  </a>
+                </div>
+              </div>
             </div>
           )}
         </>
