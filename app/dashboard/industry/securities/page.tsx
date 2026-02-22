@@ -404,7 +404,7 @@ export default function SecuritiesIndustryPage() {
                       
                       <RechartsTooltip 
                         contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }}
-                        formatter={(value: number) => [`${value.toFixed(2)}%`, '累積報酬率']}
+                        formatter={(value: any) => [`${Number(value || 0).toFixed(2)}%`, '累積報酬率']}
                       />
                       <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
                       
