@@ -16,6 +16,7 @@ export default function GovernanceDashboardPage() {
   const [isSealing, setIsSealing]           = useState(false);
   const [isSealingAll, setIsSealingAll]     = useState(false);
   const [sealResult, setSealResult]         = useState<{ hash: string; fingerprint: string } | null>(null);
+  const [batchProgress, setBatchProgress]   = useState<{ current: number; total: number; currentTask: string } | null>(null);
 
   // ── 取待審核清單 ────────────────────────────────────────────
   const fetchPendingTasks = async () => {
@@ -127,19 +128,30 @@ export default function GovernanceDashboardPage() {
     if (!confirm(`確定要「一鍵放行」全部 ${validTasks.length} 筆及格資料嗎？\n(DQ < 80 的項目將自動略過)`)) return;
 
     setIsSealingAll(true);
+    setBatchProgress({ current: 0, total: validTasks.length, currentTask: '準備中...' });
     let successCount = 0;
     try {
       for (const task of validTasks) {
+        setBatchProgress({
+          current: successCount,
+          total: validTasks.length,
+          currentTask: `${task.company} | ${task.period} ${task.type}`
+        });
         await runApprove(task);
         successCount++;
+        setBatchProgress({
+          current: successCount,
+          total: validTasks.length,
+          currentTask: successCount === validTasks.length ? '完成！' : `${task.company} | ${task.period} ✅`
+        });
       }
-      alert(`✅ 批次放行完畢！成功 ${successCount} 筆。`);
       await fetchPendingTasks();
     } catch (err: any) {
       alert(`❌ 批次中斷。已成功 ${successCount} 筆，錯誤：${err.message}`);
       await fetchPendingTasks();
     } finally {
       setIsSealingAll(false);
+      setTimeout(() => setBatchProgress(null), 3000);
     }
   };
 
@@ -217,6 +229,45 @@ export default function GovernanceDashboardPage() {
           )}
         </div>
       </header>
+
+      {/* ── 批次放行進度條 ── */}
+      {batchProgress && (
+        <div className="mb-6 shrink-0">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <p className="text-sm font-black text-slate-800">
+                  🔒 批次數位簽章放行中
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5 font-mono">{batchProgress.currentTask}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-black text-indigo-600">
+                  {batchProgress.current}
+                  <span className="text-sm text-slate-400 font-normal"> / {batchProgress.total}</span>
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  {Math.round((batchProgress.current / batchProgress.total) * 100)}%
+                </p>
+              </div>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+              <div
+                className="h-3 rounded-full transition-all duration-500"
+                style={{
+                  width: `${(batchProgress.current / batchProgress.total) * 100}%`,
+                  background: batchProgress.current === batchProgress.total
+                    ? 'linear-gradient(90deg, #10B981, #059669)'
+                    : 'linear-gradient(90deg, #6366F1, #8B5CF6)',
+                }}
+              />
+            </div>
+            {batchProgress.current === batchProgress.total && (
+              <p className="text-xs text-emerald-600 font-bold mt-2">✅ 全部放行完畢！資料已寫入金庫。</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 min-h-0">
 
