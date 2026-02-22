@@ -1,3 +1,4 @@
+// app/dashboard/governance/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -5,18 +6,15 @@ import { supabase } from '@/utils/supabase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function GovernanceDashboardPage() {
-  // 🌟 真實資料狀態
   const [pendingTasks, setPendingTasks] = useState<any[]>([]);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [latestEvidence, setLatestEvidence] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSealing, setIsSealing] = useState(false);
+  const [isSealingAll, setIsSealingAll] = useState(false); // 🟢 新增：批次放行狀態
   
-  // 權限管理
   const [user, setUser] = useState<any>(null);
-  const [role, setRole] = useState<string | null>(null);
 
-  // 🌟 核心一：撈取待辦視圖
   const fetchPendingTasks = async () => {
     try {
       const { data, error } = await supabase
@@ -38,7 +36,6 @@ export default function GovernanceDashboardPage() {
       }));
       
       setPendingTasks(formattedData);
-      // 預設選中第一筆，如果佇列空了就設為 null
       if (formattedData.length > 0) {
         setSelectedTask(formattedData[0]);
       } else {
@@ -53,15 +50,10 @@ export default function GovernanceDashboardPage() {
     const fetchAuthAndData = async () => {
       setIsLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        const { data: roleData } = await supabase.from('sys_role_grants').select('role').eq('grantee_user_id', session.user.id);
-        if (roleData && roleData.length > 0) setRole(roleData[0].role);
-      }
+      if (session?.user) setUser(session.user);
       
       await fetchPendingTasks();
 
-      // 抓取最新金庫證據 (僅供左下方顯示)
       const { data: evidence } = await supabase
         .from('sys_evidence_items')
         .select('*, sys_state_versions (version_hash)')
@@ -72,86 +64,104 @@ export default function GovernanceDashboardPage() {
       
       setIsLoading(false);
     };
-
     fetchAuthAndData();
   }, []);
 
-  // 🌟 核心二：數位簽章與放行邏輯
-  const handleApprove = async () => {
-    if (!selectedTask || !user) return alert('請先登入或選擇任務');
+  // 🌟 單筆放行邏輯
+  const handleApprove = async (taskToApprove: any) => {
+    if (!taskToApprove) return;
+    if (taskToApprove.dqScore < 80) return alert('此資料品質未達標，嚴禁放行！');
     
-    // 嚴格阻擋機制 (雙重防線)
-    if (selectedTask.dqScore < 80) return alert('此資料品質未達標，嚴禁放行！');
-    
-    if (!confirm(`⚠️ 確定要以數位簽章放行 ${selectedTask.company} 的 ${selectedTask.type} 嗎？此動作將產生不可篡改指紋並寫入金庫。`)) return;
-
     setIsSealing(true);
     try {
-      // 1. 從對應的 Table 撈出這筆草稿的完整原始資料 (Payload)
-      const tableName = selectedTask.type === '財務報表' ? 'fin_financial_fact' : 'esg_metrics';
-      const { data: rawPayload, error: payloadErr } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('id', selectedTask.recordId)
-        .single();
-        
+      const tableName = taskToApprove.type === '財務報表' ? 'fin_financial_fact' : 'esg_metrics';
+      const { data: rawPayload, error: payloadErr } = await supabase.from(tableName).select('*').eq('id', taskToApprove.recordId).single();
       if (payloadErr || !rawPayload) throw new Error('無法取得原始資料 Payload');
 
-      // 2. 決定要呼叫哪個業務引擎 (對齊你的 route.ts)
-      const pluginId = selectedTask.type === '財務報表' ? 'P_FIN_REPORT_VERSION_SEAL' : 'P_ESG_REPORT_VERSION_SEAL';
+      const pluginId = taskToApprove.type === '財務報表' ? 'P_FIN_REPORT_VERSION_SEAL' : 'P_ESG_REPORT_VERSION_SEAL';
 
-      // 3. 發送封存請求給我們堅不可摧的 route.ts
       const res = await fetch('/api/plugins/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pluginId,
-          userId: user.id,
-          input: {
-            companyId: selectedTask.company, // Fin Engine 用
-            orgId: selectedTask.company,     // ESG Engine 用
-            period: selectedTask.period,
-            payload: rawPayload
-          }
+          userId: user?.id || 'SYSTEM_ADMIN',
+          input: { companyId: taskToApprove.company, orgId: taskToApprove.company, period: taskToApprove.period, payload: rawPayload }
         })
       });
       
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || '封存失敗');
 
-      // 4. 封存成功後，將資料表原本的 DRAFT 改為 VALID，並關聯 evidence_id
-      await supabase.from(tableName).update({ 
-        status: 'VALID',
-        // 假設未來的 schema 支援反向寫入 evidence_id (PoC階段先改狀態)
-      }).eq('id', selectedTask.recordId);
-
-      alert(`✅ 審核放行成功！資料已寫入不可篡改金庫。\n\n治理版本 Hash: ${result.version_hash}\n請至「追溯查詢」或「財務分析」查看。`);
-      
-      // 5. 重新整理佇列，這筆資料就會從畫面上消失！
-      await fetchPendingTasks();
-
+      await supabase.from(tableName).update({ status: 'VALID' }).eq('id', taskToApprove.recordId);
+      return result;
     } catch (err: any) {
-      alert('❌ 放行失敗: ' + err.message);
+      throw err;
     } finally {
       setIsSealing(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-8 flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
+  // 🌟 🟢 新增：一鍵全部放行邏輯
+  const handleApproveAll = async () => {
+    const validTasks = pendingTasks.filter(t => t.dqScore >= 80);
+    if (validTasks.length === 0) return alert('目前沒有 DQ 分數及格的待放行任務。');
+    
+    if (!confirm(`⚠️ 確定要「一鍵放行」全部 ${validTasks.length} 筆及格資料嗎？\n(DQ 分數低於 80 的項目將被自動略過)`)) return;
+
+    setIsSealingAll(true);
+    let successCount = 0;
+    try {
+      // 依序執行放行 (確保指紋循序產生)
+      for (const task of validTasks) {
+        await handleApprove(task);
+        successCount++;
+      }
+      alert(`✅ 批次審核完畢！成功放行 ${successCount} 筆資料。`);
+      await fetchPendingTasks();
+    } catch (err: any) {
+      alert(`❌ 批次放行中斷。已成功 ${successCount} 筆，錯誤原因: ${err.message}`);
+      await fetchPendingTasks();
+    } finally {
+      setIsSealingAll(false);
+    }
+  };
+
+  const handleSingleApproveClick = async () => {
+    if (!confirm(`⚠️ 確定要以數位簽章放行 ${selectedTask.company} 的 ${selectedTask.type} 嗎？`)) return;
+    try {
+      await handleApprove(selectedTask);
+      alert('✅ 單筆審核放行成功！資料已寫入不可篡改金庫。');
+      await fetchPendingTasks();
+    } catch (err: any) {
+      alert('❌ 放行失敗: ' + err.message);
+    }
+  };
+
+  if (isLoading) return <div className="p-8 flex items-center justify-center h-full"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>;
 
   return (
     <div className="p-8 animate-fade-in-up max-w-7xl mx-auto h-full flex flex-col">
-      <header className="mb-8 border-b border-slate-200 pb-6 shrink-0">
-        <h1 className="text-2xl font-black text-slate-800 mb-1">治理與放行 (核決樞紐)</h1>
-        <p className="text-xs font-bold text-slate-500">
-          在此佇列中的資料皆處於 <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">DRAFT</span> 狀態，需通過 DQ 門檻並經您數位簽章後，方能生效供業務端查閱。
-        </p>
+      <header className="mb-8 border-b border-slate-200 pb-6 shrink-0 flex justify-between items-end">
+        <div>
+          <h1 className="text-2xl font-black text-slate-800 mb-1">治理與放行 (核決樞紐)</h1>
+          <p className="text-xs font-bold text-slate-500">
+            在此佇列中的資料皆處於 <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">DRAFT</span> 狀態，需通過 DQ 門檻方能生效。
+          </p>
+        </div>
+        
+        {/* 🟢 新增：一鍵全部放行按鈕 (放在 Header 右上角) */}
+        {pendingTasks.length > 0 && (
+          <button 
+            onClick={handleApproveAll}
+            disabled={isSealingAll || isSealing}
+            className={`px-4 py-2 text-sm font-black rounded-lg shadow-sm transition-all flex items-center gap-2
+              ${(isSealingAll || isSealing) ? 'bg-slate-300 text-slate-500 cursor-wait' : 'bg-emerald-600 text-white hover:bg-emerald-700 ring-2 ring-emerald-200'}
+            `}
+          >
+            {isSealingAll ? '🔄 批次處理中...' : `🚀 一鍵全部放行 (${pendingTasks.filter(t => t.dqScore >= 80).length}筆)`}
+          </button>
+        )}
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 min-h-0">
@@ -174,28 +184,14 @@ export default function GovernanceDashboardPage() {
                   className={`p-3 rounded-xl border cursor-pointer transition-all ${selectedTask?.id === task.id ? 'bg-indigo-50 border-indigo-300 shadow-sm' : 'bg-white border-slate-100 hover:border-indigo-200 hover:bg-slate-50'}`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{task.id}</span>
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${task.status === '待放行' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                      {task.status}
+                    <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{task.company} | {task.period}</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${task.dqScore >= 80 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                      DQ: {task.dqScore}
                     </span>
                   </div>
-                  <h3 className="text-sm font-bold text-slate-800">{task.company}</h3>
-                  <p className="text-xs text-slate-500 mt-1">{task.type} | {task.period}</p>
+                  <h3 className="text-sm font-bold text-slate-800">{task.type}</h3>
                 </div>
               ))
-            )}
-          </div>
-
-          {/* 最新一筆證據 (示意) */}
-          <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0">
-            <p className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">最新入庫指紋</p>
-            {latestEvidence ? (
-              <div>
-                <p className="text-xs text-emerald-400 font-mono truncate">{latestEvidence.sys_state_versions?.version_hash}</p>
-                <p className="text-[10px] text-slate-500 mt-1 truncate">SHA256: {latestEvidence.fingerprint}</p>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500">尚無存證紀錄</p>
             )}
           </div>
         </div>
@@ -208,7 +204,7 @@ export default function GovernanceDashboardPage() {
                 <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
                   <div>
                     <h2 className="text-xl font-black text-slate-800">{selectedTask.company}</h2>
-                    <p className="text-sm font-bold text-slate-500 mt-1">{selectedTask.period} {selectedTask.type} 審核請求</p>
+                    <p className="text-sm font-bold text-slate-500 mt-1">{selectedTask.period} {selectedTask.type}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">DQ 資料品質分數</p>
@@ -218,20 +214,6 @@ export default function GovernanceDashboardPage() {
                   </div>
                 </div>
 
-                {/* DQ 分數長條圖 (視覺化) */}
-                <div className="h-24 w-full mb-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart layout="vertical" data={[{ name: 'DQ Score', value: selectedTask.dqScore }]} margin={{ top: 0, right: 50, left: 0, bottom: 0 }}>
-                      <XAxis type="number" domain={[0, 100]} hide />
-                      <YAxis type="category" dataKey="name" hide />
-                      <Bar dataKey="value" barSize={20} radius={[0, 10, 10, 0]}>
-                        <Cell fill={selectedTask.dqScore >= 80 ? '#10B981' : '#F43F5E'} />
-                      </Bar>
-                      <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">自動阻擋檢查</p>
@@ -239,18 +221,13 @@ export default function GovernanceDashboardPage() {
                       {selectedTask.issue === '無' ? '✔️ 通過 (無異常)' : `❌ 攔截: ${selectedTask.issue}`}
                     </p>
                   </div>
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">對應業務模組</p>
-                    <p className="text-sm font-bold text-slate-700">scoringEngine.ts</p>
-                  </div>
                 </div>
               </div>
 
-              {/* 決策行動區 */}
+              {/* 單筆決策行動區 */}
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex items-center justify-between mt-auto shrink-0">
                 <div>
-                  <h3 className="text-sm font-black text-slate-800">執行放行決策</h3>
-                  <p className="text-xs text-slate-500 mt-1">按下放行後，資料將印上您的操作員指紋並寫入金庫。</p>
+                  <h3 className="text-sm font-black text-slate-800">執行單筆放行</h3>
                 </div>
                 
                 <div className="flex gap-3">
@@ -258,17 +235,14 @@ export default function GovernanceDashboardPage() {
                     退回修改
                   </button>
                   <button 
-                    onClick={handleApprove}
-                    disabled={selectedTask.dqScore < 80 || isSealing}
+                    onClick={handleSingleApproveClick}
+                    disabled={selectedTask.dqScore < 80 || isSealing || isSealingAll}
                     className={`px-5 py-2.5 text-white text-sm font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2
-                      ${selectedTask.dqScore < 80 
-                        ? 'bg-slate-300 cursor-not-allowed' 
-                        : 'bg-indigo-600 hover:bg-indigo-700'
-                      }
-                      ${isSealing ? 'opacity-70 cursor-wait' : ''}
+                      ${selectedTask.dqScore < 80 ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}
+                      ${(isSealing || isSealingAll) ? 'opacity-70 cursor-wait' : ''}
                     `}
                   >
-                    {isSealing ? '🔒 正在封存入庫...' : '✔️ 數位簽章放行'}
+                    {isSealing ? '🔒 處理中...' : '✔️ 數位簽章放行'}
                   </button>
                 </div>
               </div>
