@@ -421,53 +421,69 @@ export async function POST(request: Request) {
       let successCount = 0;
       const findings: any[] = [];
 
-      try {
-        const mktRes = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
-        if (!mktRes.ok) throw new Error(`市場行情 API 連線失敗，狀態碼: ${mktRes.status}`);
-        const mktRaw = await mktRes.json();
+      // ✅ 改用 Yahoo Finance API 抓一年歷史資料 + TAIEX 大盤
+      const MARKET_TICKERS: Record<string, string> = {
+        '2330': '2330.TW', '2317': '2317.TW', '2454': '2454.TW',
+        '2881': '2881.TW', '2882': '2882.TW', '2891': '2891.TW',
+        '1301': '1301.TW', '2002': '2002.TW', '1216': '1216.TW',
+        '2308': '2308.TW', 'TAIEX': '^TWII',
+      };
 
-        const today = new Date().toISOString().split('T')[0];
-        const cleanNum = (val: any) => parseFloat(String(val ?? '0').replace(/,/g, '')) || 0;
+      const p1 = Math.floor(Date.now() / 1000) - 365 * 24 * 3600;
+      const p2 = Math.floor(Date.now() / 1000);
 
-        for (const companyCode of TARGET_COMPANIES) {
-          // TWSE STOCK_DAY_ALL 的欄位為 Code / Name / ...
-          const rec = Array.isArray(mktRaw)
-            ? mktRaw.find((d: any) => String(d['Code'] ?? '').trim() === companyCode)
-            : null;
+      const fetchYahooHistory = async (ticker: string) => {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&period1=${p1}&period2=${p2}`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
+        const json: any = await res.json();
+        const result = json?.chart?.result?.[0];
+        if (!result) throw new Error('no result');
+        const timestamps: number[] = result.timestamp ?? [];
+        const q = result.indicators?.quote?.[0] ?? {};
+        return timestamps
+          .map((ts: number, i: number) => ({
+            trade_date: new Date(ts * 1000).toISOString().split('T')[0],
+            open:   q.open?.[i]   != null ? +q.open[i].toFixed(2)   : null,
+            high:   q.high?.[i]   != null ? +q.high[i].toFixed(2)   : null,
+            low:    q.low?.[i]    != null ? +q.low[i].toFixed(2)    : null,
+            close:  q.close?.[i]  != null ? +q.close[i].toFixed(2)  : null,
+            volume: q.volume?.[i] ?? 0,
+          }))
+          .filter((r: any) => r.close != null);
+      };
 
-          if (!rec) {
+      for (const [companyCode, ticker] of Object.entries(MARKET_TICKERS)) {
+        try {
+          const rows = await fetchYahooHistory(ticker);
+          if (rows.length === 0) {
             findings.push({ id: companyCode, status: 'NOT_FOUND' });
             continue;
           }
-
-          const payload = {
+          const records = rows.map((r: any) => ({
             company_code: companyCode,
-            trade_date: today,
-            open:        cleanNum(rec['OpeningPrice']),  // ✅ 短名欄位
-            high:        cleanNum(rec['HighestPrice']),
-            low:         cleanNum(rec['LowestPrice']),
-            close:       cleanNum(rec['ClosingPrice']),
-            volume:      cleanNum(rec['TradeVolume']),
-            trade_value: cleanNum(rec['TradeValue']),
-            change:      cleanNum(rec['Change']),
-            status: 'VALID',
-            source_ref: 'TWSE_OPENAPI'
-          };
-
-          const { error } = await supabaseAdmin
-            .from('mkt_daily_series')
-            .upsert(payload, { onConflict: 'company_code,trade_date' });
-
-          if (!error) {
-            successCount++;
-            findings.push({ id: companyCode, status: 'SYNCED', close: payload.close }); // ✅ 短名
-          } else {
-            findings.push({ id: companyCode, status: 'ERROR', desc: error.message });
+            trade_date:   r.trade_date,
+            open:         r.open,
+            high:         r.high,
+            low:          r.low,
+            close:        r.close,
+            volume:       r.volume,
+            status:       'VALID',
+            dq_score:     100,
+            source_ref:   'YAHOO_FINANCE',
+          }));
+          // 先刪舊資料再批次寫入（冪等）
+          await supabaseAdmin.from('mkt_daily_series').delete().eq('company_code', companyCode);
+          for (let i = 0; i < records.length; i += 100) {
+            const { error } = await supabaseAdmin.from('mkt_daily_series').insert(records.slice(i, i + 100));
+            if (error) throw error;
           }
+          successCount++;
+          findings.push({ id: companyCode, status: 'SYNCED', rows: records.length, close: records[records.length - 1]?.close });
+        } catch (err: any) {
+          console.error(`[L1_MARKET_DAILY_SYNC] ${companyCode} 失敗:`, err.message);
+          findings.push({ id: companyCode, status: 'ERROR', desc: err.message });
         }
-      } catch (err: any) {
-        console.error('[L1_MARKET_DAILY_SYNC] 失敗:', err.message);
-        findings.push({ id: 'SYSTEM', status: 'FAILED', desc: err.message });
       }
 
       auditReport = {
@@ -478,7 +494,7 @@ export async function POST(request: Request) {
         findings
       };
       version_hash = `l1-mkt-${Date.now()}`;
-      summary = `[L1 市場] 每日行情同步完成 (成功: ${successCount} 筆)`;
+      summary = `[L1 市場] Yahoo Finance 歷史行情同步完成 (成功: ${successCount} 家，含 TAIEX)`;
       storagePath = `plugin_results/l1_mkt_${Date.now()}.json`;
 
     // ==========================================
