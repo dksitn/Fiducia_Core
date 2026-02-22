@@ -242,14 +242,17 @@ export async function POST(request: Request) {
 
             await supabaseAdmin.from('esg_metrics').upsert({
               company_code: companyCode,
+              period: year,                         // ✅ 實際主鍵欄位是 period
+              carbon_emission: scope1 + scope2,     // ✅ 實際欄位名稱
+              // 以下欄位需先執行 ALTER TABLE 新增（見 supabase_setup.sql）
               year,
               scope1_tco2e: scope1,
               scope2_tco2e: scope2,
               assurance_level: assuranceLevel,
+              data_source: hasTrueData ? 'TWSE_OPENAPI' : 'SECTOR_ESTIMATE',
               dq_score: dqScore,
               status: finalStatus,
-              data_source: hasTrueData ? 'TWSE_OPENAPI' : 'SECTOR_ESTIMATE'
-            }, { onConflict: 'company_code,year' });
+            }, { onConflict: 'company_code,period' }); // ✅ onConflict 用實際主鍵
 
             if (finalStatus !== 'REJECTED') successCount++;
           }
@@ -311,10 +314,10 @@ export async function POST(request: Request) {
           const payload = {
             company_code: companyCode,
             trade_date: today,
-            open_price:  cleanNum(rec['OpeningPrice']),
-            high_price:  cleanNum(rec['HighestPrice']),
-            low_price:   cleanNum(rec['LowestPrice']),
-            close_price: cleanNum(rec['ClosingPrice']),
+            open:        cleanNum(rec['OpeningPrice']),  // ✅ 短名欄位
+            high:        cleanNum(rec['HighestPrice']),
+            low:         cleanNum(rec['LowestPrice']),
+            close:       cleanNum(rec['ClosingPrice']),
             volume:      cleanNum(rec['TradeVolume']),
             trade_value: cleanNum(rec['TradeValue']),
             change:      cleanNum(rec['Change']),
@@ -328,7 +331,7 @@ export async function POST(request: Request) {
 
           if (!error) {
             successCount++;
-            findings.push({ id: companyCode, status: 'SYNCED', close: payload.close_price });
+            findings.push({ id: companyCode, status: 'SYNCED', close: payload.close }); // ✅ 短名
           } else {
             findings.push({ id: companyCode, status: 'ERROR', desc: error.message });
           }
@@ -790,3 +793,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+

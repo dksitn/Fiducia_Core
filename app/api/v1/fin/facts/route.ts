@@ -1,8 +1,14 @@
-// app/api/v1/fin/facts/route.ts （升級版）
+// app/api/v1/fin/facts/route.ts
 import { NextResponse } from 'next/server';
-import { supabase } from '@/utils/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'edge';
+
+// ✅ 使用 service role，繞過 RLS，確保 DRAFT 寫入成功
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: Request) {
   try {
@@ -11,35 +17,35 @@ export async function POST(request: Request) {
 
     if (!companyCode || !period || !metrics) {
       return NextResponse.json(
-        { success: false, error: { message: "缺少必要欄位：companyCode, period, 或 metrics" } },
+        { success: false, error: { message: '缺少必要欄位：companyCode, period, 或 metrics' } },
         { status: 400 }
       );
     }
 
-    // 🌟 核心升級：從 metrics 解包扁平欄位
+    // 從 metrics 解包扁平欄位（camelCase → snake_case）
     const flatFields = {
-      revenue:              metrics.revenue              ?? null,
-      net_income:           metrics.netIncome            ?? null,
-      equity:               metrics.equity               ?? null,
-      total_assets:         metrics.totalAssets          ?? null,
-      operating_cash_flow:  metrics.operatingCashFlow    ?? null,
-      capital_expenditure:  metrics.capitalExpenditure   ?? null,
+      revenue:             metrics.revenue             ?? null,
+      net_income:          metrics.netIncome           ?? null,
+      equity:              metrics.equity              ?? null,
+      total_assets:        metrics.totalAssets         ?? null,
+      total_liabilities:   metrics.totalLiabilities    ?? null,
+      operating_cash_flow: metrics.operatingCashFlow   ?? null,
+      capital_expenditure: metrics.capitalExpenditure  ?? null,
     };
 
-    // 使用 upsert 避免重複寫入（相同 company_code + period 視為更新）
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('fin_financial_fact')
       .upsert(
         [{
           company_code: companyCode,
-          period:       period,
-          status:       'DRAFT',
-          metrics:      metrics,        // 保留原始 JSONB
-          ...flatFields,                // 扁平欄位同步寫入
-          dq_score:     85,
-          created_by:   userId ?? null,
+          period,
+          status:    'DRAFT',   // ✅ 強制 DRAFT，走治理放行流程
+          metrics,              // 保留原始 JSONB
+          ...flatFields,
+          dq_score:  85,
+          created_by: userId ?? null,
         }],
-        { onConflict: 'company_code,period' }  // 需要先建 unique constraint（見下方）
+        { onConflict: 'company_code,period' }
       )
       .select('id, status')
       .single();
@@ -50,18 +56,18 @@ export async function POST(request: Request) {
       {
         success: true,
         data: {
-          id: data.id,
-          status: data.status,
-          message: "✅ 財務數據已寫入，等待 DQ 驗證與治理放行。"
-        }
+          id:      data.id,
+          status:  data.status,
+          message: '✅ 財務數據已寫入，等待 DQ 驗證與治理放行。',
+        },
       },
       { status: 201 }
     );
 
   } catch (error: any) {
-    console.error("API 寫入失敗:", error);
+    console.error('[fin/facts] 寫入失敗:', error);
     return NextResponse.json(
-      { success: false, error: { message: error.message || "伺服器內部錯誤" } },
+      { success: false, error: { message: error.message || '伺服器內部錯誤' } },
       { status: 500 }
     );
   }
