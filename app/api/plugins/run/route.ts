@@ -421,69 +421,72 @@ export async function POST(request: Request) {
       let successCount = 0;
       const findings: any[] = [];
 
-      // ✅ 改用 Yahoo Finance API 抓一年歷史資料 + TAIEX 大盤
-      const MARKET_TICKERS: Record<string, string> = {
-        '2330': '2330.TW', '2317': '2317.TW', '2454': '2454.TW',
-        '2881': '2881.TW', '2882': '2882.TW', '2891': '2891.TW',
-        '1301': '1301.TW', '2002': '2002.TW', '1216': '1216.TW',
-        '2308': '2308.TW', 'TAIEX': '^TWII',
-      };
+      // 個股：TWSE STOCK_DAY_ALL（今日單筆，Cloudflare 可靠）
+      const cleanNum = (val: any) => parseFloat(String(val ?? '0').replace(/,/g, '')) || 0;
+      const today = new Date().toISOString().split('T')[0];
 
-      const p1 = Math.floor(Date.now() / 1000) - 365 * 24 * 3600;
-      const p2 = Math.floor(Date.now() / 1000);
+      const mktRes = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
+      if (!mktRes.ok) throw new Error(`TWSE API 失敗: ${mktRes.status}`);
+      const mktRaw: any[] = await mktRes.json();
 
-      const fetchYahooHistory = async (ticker: string) => {
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&period1=${p1}&period2=${p2}`;
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
-        const json: any = await res.json();
-        const result = json?.chart?.result?.[0];
-        if (!result) throw new Error('no result');
-        const timestamps: number[] = result.timestamp ?? [];
-        const q = result.indicators?.quote?.[0] ?? {};
-        return timestamps
-          .map((ts: number, i: number) => ({
-            trade_date: new Date(ts * 1000).toISOString().split('T')[0],
-            open:   q.open?.[i]   != null ? +q.open[i].toFixed(2)   : null,
-            high:   q.high?.[i]   != null ? +q.high[i].toFixed(2)   : null,
-            low:    q.low?.[i]    != null ? +q.low[i].toFixed(2)    : null,
-            close:  q.close?.[i]  != null ? +q.close[i].toFixed(2)  : null,
-            volume: q.volume?.[i] ?? 0,
-          }))
-          .filter((r: any) => r.close != null);
-      };
-
-      for (const [companyCode, ticker] of Object.entries(MARKET_TICKERS)) {
+      for (const companyCode of TARGET_COMPANIES) {
         try {
-          const rows = await fetchYahooHistory(ticker);
-          if (rows.length === 0) {
-            findings.push({ id: companyCode, status: 'NOT_FOUND' });
-            continue;
-          }
-          const records = rows.map((r: any) => ({
+          const rec = mktRaw.find((d: any) => String(d['Code'] ?? '').trim() === companyCode);
+          if (!rec) { findings.push({ id: companyCode, status: 'NOT_FOUND' }); continue; }
+          const payload = {
             company_code: companyCode,
-            trade_date:   r.trade_date,
-            open:         r.open,
-            high:         r.high,
-            low:          r.low,
-            close:        r.close,
-            volume:       r.volume,
+            trade_date:   today,
+            open:         cleanNum(rec['OpeningPrice']),
+            high:         cleanNum(rec['HighestPrice']),
+            low:          cleanNum(rec['LowestPrice']),
+            close:        cleanNum(rec['ClosingPrice']),
+            volume:       cleanNum(rec['TradeVolume']),
             status:       'VALID',
             dq_score:     100,
-            source_ref:   'YAHOO_FINANCE',
-          }));
-          // 先刪舊資料再批次寫入（冪等）
-          await supabaseAdmin.from('mkt_daily_series').delete().eq('company_code', companyCode);
-          for (let i = 0; i < records.length; i += 100) {
-            const { error } = await supabaseAdmin.from('mkt_daily_series').insert(records.slice(i, i + 100));
-            if (error) throw error;
-          }
+            source_ref:   'TWSE_OPENAPI',
+          };
+          const { error } = await supabaseAdmin.from('mkt_daily_series')
+            .upsert(payload, { onConflict: 'company_code,trade_date' });
+          if (error) throw error;
           successCount++;
-          findings.push({ id: companyCode, status: 'SYNCED', rows: records.length, close: records[records.length - 1]?.close });
+          findings.push({ id: companyCode, status: 'SYNCED', close: payload.close });
         } catch (err: any) {
-          console.error(`[L1_MARKET_DAILY_SYNC] ${companyCode} 失敗:`, err.message);
           findings.push({ id: companyCode, status: 'ERROR', desc: err.message });
         }
+      }
+
+      // TAIEX 大盤：TWSE FMTQIK API
+      try {
+        const taiexRes = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK');
+        if (taiexRes.ok) {
+          const taiexRaw: any[] = await taiexRes.json();
+          // FMTQIK 返回多筆，取最新一筆
+          const latest = taiexRaw?.[taiexRaw.length - 1];
+          if (latest) {
+            const taiexPayload = {
+              company_code: 'TAIEX',
+              trade_date:   today,
+              open:         cleanNum(latest['開盤指數'] ?? latest['Open']),
+              high:         cleanNum(latest['最高指數'] ?? latest['High']),
+              low:          cleanNum(latest['最低指數'] ?? latest['Low']),
+              close:        cleanNum(latest['收盤指數'] ?? latest['Close'] ?? latest['加權指數']),
+              volume:       cleanNum(latest['成交金額'] ?? 0),
+              status:       'VALID',
+              dq_score:     100,
+              source_ref:   'TWSE_FMTQIK',
+            };
+            if (taiexPayload.close > 0) {
+              await supabaseAdmin.from('mkt_daily_series')
+                .upsert(taiexPayload, { onConflict: 'company_code,trade_date' });
+              successCount++;
+              findings.push({ id: 'TAIEX', status: 'SYNCED', close: taiexPayload.close });
+            } else {
+              findings.push({ id: 'TAIEX', status: 'NO_DATA', desc: 'close=0' });
+            }
+          }
+        }
+      } catch (err: any) {
+        findings.push({ id: 'TAIEX', status: 'ERROR', desc: err.message });
       }
 
       auditReport = {
