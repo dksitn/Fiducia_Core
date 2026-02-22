@@ -248,7 +248,7 @@ export default function SecuritiesIndustryPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded font-bold tracking-widest">證券業專屬視角</span>
-            <h1 className="text-2xl font-black text-slate-800">投資分析與部位風控</h1>
+            <h1 className="text-2xl font-black text-slate-800">投資分析</h1>
           </div>
           <p className="text-xs font-bold text-slate-500">
             基於三年期 (12 季) 財務事實 + 月營收趨勢 + 市場行情，遵循「研究 ➔ 決策 ➔ 風控 ➔ 溯源」標準流程。
@@ -354,7 +354,7 @@ export default function SecuritiesIndustryPage() {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                         <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
                         <YAxis yAxisId="left"  tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}億`} />
-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
+                        <YAxis yAxisId="right" orientation="right" domain={[0, 'auto']} tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
                         <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} />
                         <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
                         <Bar  yAxisId="left"  dataKey="revenue" name="營業收入(億)" fill="#E2E8F0" radius={[4,4,0,0]} barSize={28} />
@@ -436,7 +436,7 @@ export default function SecuritiesIndustryPage() {
                 <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl bg-white py-20">
                   <span className="text-4xl mb-3 opacity-40">📈</span>
                   <p className="text-sm font-bold text-slate-600">技術分析資料尚未同步</p>
-                  <p className="text-xs text-slate-400 mt-1">請先執行 <code className="bg-slate-100 px-1 rounded">seed_market.mjs</code> 寫入歷史 K 線資料</p>
+                  <p className="text-xs text-slate-400 mt-1">請至 Admin → 第一層 → 每日市場行情 同步，或執行 seed_market.mjs 寫入歷史 K 線資料</p>
                 </div>
               ) : (
                 <>

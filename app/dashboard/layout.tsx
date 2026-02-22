@@ -52,7 +52,7 @@ function Sidebar() {
           <Link href="/dashboard/industry/bank" className={getLinkClass('/dashboard/industry/bank')}>🏦 銀行業 (企業授信)</Link>
           {/* 🚀 補上漏掉的金控組合 */}
           <Link href="/dashboard/industry/fhc" className={getLinkClass('/dashboard/industry/fhc')}>🏢 金融業 (金控組合)</Link>
-          <Link href="/dashboard/industry/securities" className={getLinkClass('/dashboard/industry/securities')}>📈 證券業 (自營風控)</Link>
+          <Link href="/dashboard/industry/securities" className={getLinkClass('/dashboard/industry/securities')}>📈 證券業 (投資分析)</Link>
         </div>
       </nav>
 

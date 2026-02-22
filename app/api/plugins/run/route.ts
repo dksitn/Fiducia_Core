@@ -831,8 +831,8 @@ export async function POST(request: Request) {
           company_code: orgId,
           period,
           metrics: {
-            scope1_emissions: dbRecord.scope1_emissions,
-            scope2_emissions: dbRecord.scope2_emissions,
+            scope1_emissions: dbRecord.scope1_tco2e,
+            scope2_emissions: dbRecord.scope2_tco2e,
             assurance_level:  dbRecord.assurance_level,
             reporting_year:   dbRecord.reporting_year,
           }
