@@ -179,13 +179,12 @@ export async function POST(request: Request) {
             revenue:             rev,
             net_income:          ni,
             total_assets:        assets,
-            // total_liabilities 不在 schema 中，放入 metrics jsonb
+            total_liabilities:   liab,
             equity:              eq,
             operating_cash_flow: ocf,
             capital_expenditure: capex,
             dq_score:            dqScore,
             status:              'DRAFT',
-            // ✅ metrics NOT NULL 欄位：將所有財務數字（含 liabilities）打包為 jsonb
             metrics: {
               revenue:             rev,
               net_income:          ni,
