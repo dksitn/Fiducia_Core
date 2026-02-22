@@ -88,6 +88,7 @@ export default function FHCIndustryPage() {
   const [latestEsg, setLatestEsg]         = useState<any>(null);
   const [evidences, setEvidences]         = useState<any[]>([]);
   const [isLoading, setIsLoading]         = useState(true);
+  const [allEsgData, setAllEsgData]       = useState<any[]>([]);
 
   const companyLabel = FHC_COMPANIES.find(c => c.value === selectedCompany)?.label ?? selectedCompany;
   const exposureData = FHC_EXPOSURE[selectedCompany] ?? [];
@@ -107,6 +108,28 @@ export default function FHCIndustryPage() {
       setEsgData(esg ?? []);
       setLatestEsg((esg ?? [])[0] ?? null);
       setEvidences(evid ?? []);
+
+      // 跨公司 ESG：查所有公司最新一筆
+      const { data: allEsg } = await supabase
+        .from('esg_metrics')
+        .select('company_code, period, scope1_tco2e, scope2_tco2e, assurance_level, dq_score')
+        .eq('status', 'VALID')
+        .order('period', { ascending: false });
+      const seen = new Set<string>();
+      const latestPerCompany = (allEsg ?? []).filter((r: any) => {
+        if (seen.has(r.company_code)) return false;
+        seen.add(r.company_code);
+        return true;
+      }).map((r: any) => ({
+        company_code: r.company_code,
+        period:       r.period,
+        scope1:       r.scope1_tco2e ?? 0,
+        scope2:       r.scope2_tco2e ?? 0,
+        total:        (r.scope1_tco2e ?? 0) + (r.scope2_tco2e ?? 0),
+        assurance:    r.assurance_level ?? 'N/A',
+        dq_score:     r.dq_score ?? 0,
+      })).sort((a: any, b: any) => b.total - a.total);
+      setAllEsgData(latestPerCompany);
     } finally {
       setIsLoading(false);
     }
