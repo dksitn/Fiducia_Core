@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/utils/supabase';
 import {
-  ComposedChart, Line, Bar, BarChart, XAxis, YAxis, CartesianGrid,
+  ComposedChart, LineChart, Line, Bar, BarChart, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Cell
 } from 'recharts';
 import { useAuth } from '@/app/dashboard/auth-context';
