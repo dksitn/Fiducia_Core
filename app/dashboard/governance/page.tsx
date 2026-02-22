@@ -74,9 +74,28 @@ export default function GovernanceDashboardPage() {
     
     setIsSealing(true);
     try {
+      // ✅ fin_financial_fact 主鍵是 (company_code, period)，不是 id
       const tableName = taskToApprove.type === '財務報表' ? 'fin_financial_fact' : 'esg_metrics';
-      const { data: rawPayload, error: payloadErr } = await supabase.from(tableName).select('*').eq('id', taskToApprove.recordId).single();
-      if (payloadErr || !rawPayload) throw new Error('無法取得原始資料 Payload');
+      const { data: rawPayload, error: payloadErr } = await supabase
+        .from(tableName)
+        .select('*')
+        .eq('company_code', taskToApprove.company)
+        .eq('period', taskToApprove.period)
+        .eq('status', 'DRAFT')
+        .maybeSingle();
+
+      // 若查不到 DRAFT 資料，改查任何狀態（可能已被放行）
+      let finalPayload = rawPayload;
+      if (!finalPayload) {
+        const { data: fallbackPayload } = await supabase
+          .from(tableName)
+          .select('*')
+          .eq('company_code', taskToApprove.company)
+          .eq('period', taskToApprove.period)
+          .maybeSingle();
+        finalPayload = fallbackPayload;
+      }
+      if (!finalPayload) throw new Error(`找不到 ${taskToApprove.company} / ${taskToApprove.period} 的原始資料`);
 
       const pluginId = taskToApprove.type === '財務報表' ? 'P_FIN_REPORT_VERSION_SEAL' : 'P_ESG_REPORT_VERSION_SEAL';
 
@@ -86,14 +105,25 @@ export default function GovernanceDashboardPage() {
         body: JSON.stringify({
           pluginId,
           userId: user?.id || 'SYSTEM_ADMIN',
-          input: { companyId: taskToApprove.company, orgId: taskToApprove.company, period: taskToApprove.period, payload: rawPayload }
+          input: {
+            companyId: taskToApprove.company,
+            orgId:     taskToApprove.company,
+            period:    taskToApprove.period,
+            payload:   finalPayload
+          }
         })
       });
-      
+
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || '封存失敗');
 
-      await supabase.from(tableName).update({ status: 'VALID' }).eq('id', taskToApprove.recordId);
+      // ✅ 以複合主鍵更新狀態
+      await supabase
+        .from(tableName)
+        .update({ status: 'VALID' })
+        .eq('company_code', taskToApprove.company)
+        .eq('period', taskToApprove.period);
+
       return result;
     } catch (err: any) {
       throw err;

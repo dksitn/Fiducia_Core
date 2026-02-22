@@ -86,7 +86,7 @@ export default function SecuritiesIndustryPage() {
           .select('*')
           .eq('company_code', companyCode)
           .eq('status', 'VALID')
-          .order('year', { ascending: false })
+          .order('period', { ascending: false })  // ✅ 實際欄位是 period，不是 year
           .limit(1),
         supabase
           .from('mkt_material_events')
@@ -623,12 +623,14 @@ export default function SecuritiesIndustryPage() {
                 <div className="space-y-3">
                   <div>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">最新年度</p>
-                    <p className="text-xs font-mono font-bold text-slate-700 bg-slate-50 p-2 rounded border">{esgData?.year ?? 'N/A'}</p>
+                    <p className="text-xs font-mono font-bold text-slate-700 bg-slate-50 p-2 rounded border">{esgData?.period ?? esgData?.year ?? 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">範疇一碳排</p>
                     <p className="text-xs font-mono font-bold text-slate-700 bg-slate-50 p-2 rounded border">
-                      {esgData ? `${esgData.scope1_tco2e?.toLocaleString()} tCO₂e` : 'N/A'}
+                      {esgData
+                        ? `${(esgData.scope1_tco2e ?? esgData.carbon_emission)?.toLocaleString() ?? 'N/A'} tCO₂e`
+                        : 'N/A'}
                     </p>
                   </div>
                   <div>
