@@ -190,7 +190,7 @@ export default function BankingIndustryPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded font-bold tracking-widest uppercase shadow-sm">
-              銀行業專屬視角
+              企業授信專屬視角
             </span>
             <h1 className="text-2xl font-black">企業授信與綠色金融評級</h1>
           </div>
@@ -261,7 +261,7 @@ export default function BankingIndustryPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <KpiBox
                   label="最新收盤價"
-                  value={marketData ? `$${marketData.close_price}` : 'N/A'}
+                  value={marketData ? `$${marketData.close}` : 'N/A'}
                   sub={marketData ? `${marketData.trade_date} 更新` : '行情資料待同步'}
                   badge={marketData?.change >= 0 ? `▲ ${marketData?.change}` : `▼ ${Math.abs(marketData?.change)}`}
                   badgeColor={marketData?.change >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'}
