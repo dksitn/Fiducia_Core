@@ -45,7 +45,7 @@ const getPluginIdFromSummary = (summary: string) => {
   if (summary.includes('永續') || summary.includes('ESG')) return 'ESG_METRICS_SYNC';
   if (summary.includes('財報三表') || summary.includes('L2 快照') || summary.includes('12季')) return 'TW_FUNDAMENTAL_SYNC';
   if (summary.includes('月營收')) return 'TW_MONTHLY_REVENUE_SYNC';
-  if (summary.includes('PM 決策') || summary.includes('自營')) return 'P_SEC_PM_DECISION_ENGINE';
+  if (summary.includes('PM 決策') || summary.includes('投資決策')) return 'P_SEC_PM_DECISION_ENGINE';
   if (summary.includes('供應鏈')) return 'CVE_TRACK';
   return null;
 };
@@ -460,13 +460,13 @@ export default function AdminPage() {
               ]
             },
             {
-              layer: '行業引擎', layerLabel: '行業引擎：證券業自營部門（自營風控專用）',
+              layer: '行業引擎', layerLabel: '行業引擎：證券業投資分析部門',
               color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200',
               plugins: [
                 {
-                  pluginId: 'P_SEC_PM_DECISION_ENGINE', icon: '📊', title: '自營部門投資決策引擎',
+                  pluginId: 'P_SEC_PM_DECISION_ENGINE', icon: '📊', title: '投資決策引擎',
                   btnText: '執行運算', themeColor: '#2563EB',
-                  industry: '證券業自營部門專用',
+                  industry: '證券業專用',
                   apiSource: '資料庫 財務事實表＋市場行情表（正式有效資料）',
                   dataDesc: '讀取已放行財報計算現金流量品質比（現金流量／淨利）、負債比率、營收季增率，輸出買進／觀望／減碼操作建議'
                 },
@@ -507,7 +507,7 @@ export default function AdminPage() {
                     <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                       <p className="font-black text-[11px] text-slate-800 leading-tight">{p.title}</p>
                       <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
-                        p.industry === '證券業自營部門專用' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                        p.industry === '證券業專用' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
                         p.industry === '系統基礎設施' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
                         'bg-slate-100 text-slate-500 border border-slate-200'
                       }`}>{p.industry}</span>

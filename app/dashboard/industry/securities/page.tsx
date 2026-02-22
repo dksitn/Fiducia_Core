@@ -329,7 +329,7 @@ export default function SecuritiesIndustryPage() {
           {activeTab === 'RESEARCH' && !isGapDetected && (
             <div className="space-y-6">
               {/* 上方 KPI */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 min-w-0">
                 <MetricBox label="最新季度營收" value={fmtBig(latestFin?.revenue)} sub={latestFin?.period} />
                 <MetricBox label="稅後淨利" value={fmtBig(latestFin?.net_income)}
                   warn={(latestFin?.net_income ?? 0) < 0} />
@@ -621,7 +621,7 @@ export default function SecuritiesIndustryPage() {
           {/* ══ 法遵風控 ════════════════════════════════════════ */}
           {activeTab === 'COMPLIANCE' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 space-y-4">
+              <div className="lg:col-span-1 space-y-4 min-w-0">
                 <div className={`p-6 rounded-2xl border shadow-sm flex items-center gap-4 ${hasControversy ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
                   <div className="text-3xl">{hasControversy ? '⚠️' : '✅'}</div>
                   <div>
@@ -635,9 +635,9 @@ export default function SecuritiesIndustryPage() {
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <p className="text-xs font-bold text-slate-500 mb-3 border-b border-slate-100 pb-2">ESG 風控快照</p>
                     <div className="space-y-2 text-xs">
-                      <div className="flex justify-between"><span className="text-slate-500">確信等級</span><span className={`font-black ${esgData.assurance_level === 'High' ? 'text-emerald-600' : 'text-amber-600'}`}>{esgData.assurance_level}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">DQ 分數</span><span className="font-black text-slate-700">{esgData.dq_score ?? 'N/A'} / 100</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">範疇一</span><span className="font-black text-slate-700">{esgData.scope1_tco2e?.toLocaleString() ?? 'N/A'} tCO₂e</span></div>
+                      <div className="flex justify-between items-center gap-2"><span className="text-slate-500 shrink-0">確信等級</span><span className={`font-black text-right ${esgData.assurance_level === 'High' ? 'text-emerald-600' : 'text-amber-600'}`}>{esgData.assurance_level}</span></div>
+                      <div className="flex justify-between items-center gap-2"><span className="text-slate-500 shrink-0">DQ 分數</span><span className="font-black text-slate-700 text-right">{esgData.dq_score ?? 'N/A'} / 100</span></div>
+                      <div className="flex justify-between items-center gap-2"><span className="text-slate-500 shrink-0">範疇一</span><span className="font-black text-slate-700 text-right">{esgData.scope1_tco2e?.toLocaleString() ?? 'N/A'} tCO₂e</span></div>
                     </div>
                   </div>
                 )}
