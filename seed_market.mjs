@@ -1,21 +1,22 @@
-// seed_market.mjs
+// seed_market_v2.mjs
+// 執行方式：node seed_market_v2.mjs
+// 需求：npm install yahoo-finance2 @supabase/supabase-js dotenv
+
 import yf from 'yahoo-finance2';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
-// 載入 .env.local 檔案
 dotenv.config({ path: '.env.local' });
 
-// 防禦性實例化 yahoo-finance2
 const yahooFinance = typeof yf === 'function' ? new yf() : yf;
 
-// 從環境變數安全地讀取金鑰
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// 防呆機制
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ 錯誤：找不到 Supabase 環境變數，請確認 .env.local 檔案是否存在且包含 URL 與 SERVICE_ROLE_KEY。");
+  console.error('❌ 找不到 Supabase 環境變數，請確認 .env.local 包含：');
+  console.error('   NEXT_PUBLIC_SUPABASE_URL=...');
+  console.error('   SUPABASE_SERVICE_ROLE_KEY=...');
   process.exit(1);
 }
 
@@ -25,58 +26,76 @@ const COMPANIES = {
   '2330': '2330.TW', '2317': '2317.TW', '2454': '2454.TW',
   '2881': '2881.TW', '2882': '2882.TW', '2891': '2891.TW',
   '1301': '1301.TW', '2002': '2002.TW', '1216': '1216.TW',
-  '2308': '2308.TW', 'TAIEX': '^TWII' // 大盤
+  '2308': '2308.TW',
+  'TAIEX': '^TWII',  // ✅ 大盤指數（技術分析必要）
 };
 
-async function fetchAndUpload() {
-  console.log("🚀 開始透過 Node.js 獲取真實市場歷史資料...");
-  
-  // 計算一年前的日期
-  const oneYearAgo = new Date();
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-  const period1 = oneYearAgo.toISOString().split('T')[0];
+const oneYearAgo = new Date();
+oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+const period1 = oneYearAgo.toISOString().split('T')[0];
 
-  for (const [companyCode, ticker] of Object.entries(COMPANIES)) {
-    console.log(`📥 正在處理: ${companyCode} (${ticker})...`);
-    try {
-      // 獲取歷史資料
-      const result = await yahooFinance.historical(ticker, { period1 });
-      
-      if (!result || result.length === 0) {
-        console.log(`⚠️ 找不到 ${companyCode} 的資料，跳過。`);
-        continue;
-      }
+console.log(`\n🚀 FIDUCIA Core - 市場 K 線歷史資料同步`);
+console.log(`📅 抓取期間：${period1} ~ 今日`);
+console.log(`📦 目標：${Object.keys(COMPANIES).length} 家公司 + 大盤 TAIEX\n`);
 
-      // 轉換成 Supabase 需要的格式
-      const records = result.map(row => ({
+let totalInserted = 0;
+let failed = [];
+
+for (const [companyCode, ticker] of Object.entries(COMPANIES)) {
+  process.stdout.write(`  [${companyCode}] ${ticker} ... `);
+  try {
+    const result = await yahooFinance.historical(ticker, {
+      period1,
+      interval: '1d',
+    });
+
+    if (!result || result.length === 0) {
+      console.log('⚠️  無資料，跳過');
+      failed.push({ code: companyCode, reason: '無歷史資料' });
+      continue;
+    }
+
+    const records = result
+      .filter(row => row.close != null)
+      .map(row => ({
         company_code: companyCode,
-        trade_date: row.date.toISOString().split('T')[0],
-        open: Number(row.open.toFixed(2)),
-        high: Number(row.high.toFixed(2)),
-        low: Number(row.low.toFixed(2)),
-        close: Number(row.close.toFixed(2)),
-        volume: row.volume || 0,
-        status: 'VALID',
-        dq_score: 100
+        trade_date:   row.date.toISOString().split('T')[0],
+        open:         Number((row.open  ?? row.close).toFixed(2)),
+        high:         Number((row.high  ?? row.close).toFixed(2)),
+        low:          Number((row.low   ?? row.close).toFixed(2)),
+        close:        Number(row.close.toFixed(2)),
+        volume:       row.volume || 0,
+        status:       'VALID',
+        dq_score:     100,
+        source_ref:   'YAHOO_FINANCE',
       }));
 
-      // 冪等性寫入：先刪除舊資料，再寫入新資料
-      await supabase.from('mkt_daily_series').delete().eq('company_code', companyCode);
-      
-      // 分批寫入避免 payload 過大
-      const chunkSize = 100;
-      for (let i = 0; i < records.length; i += chunkSize) {
-        const chunk = records.slice(i, i + chunkSize);
-        const { error } = await supabase.from('mkt_daily_series').insert(chunk);
-        if (error) throw error;
-      }
-      
-      console.log(`  ✅ 成功寫入 ${records.length} 筆日 K 資料。`);
-    } catch (err) {
-      console.error(`❌ 處理 ${companyCode} 時發生錯誤:`, err.message);
+    // 先刪舊資料再批次插入（冪等）
+    await supabase.from('mkt_daily_series').delete().eq('company_code', companyCode);
+
+    const CHUNK = 100;
+    let inserted = 0;
+    for (let i = 0; i < records.length; i += CHUNK) {
+      const { error } = await supabase.from('mkt_daily_series').insert(records.slice(i, i + CHUNK));
+      if (error) throw error;
+      inserted += Math.min(CHUNK, records.length - i);
     }
+
+    totalInserted += inserted;
+    console.log(`✅ ${inserted} 筆`);
+
+  } catch (err) {
+    console.log(`❌ 失敗`);
+    failed.push({ code: companyCode, reason: err.message });
   }
-  console.log("🎉 全部同步完成！");
 }
 
-fetchAndUpload();
+console.log(`\n${'─'.repeat(50)}`);
+console.log(`🎉 同步完成！共寫入 ${totalInserted} 筆 K 線資料`);
+
+if (failed.length > 0) {
+  console.log(`\n⚠️  以下 ${failed.length} 家未成功：`);
+  failed.forEach(f => console.log(`   ${f.code}: ${f.reason}`));
+}
+
+console.log(`\n✅ 下一步：重整瀏覽器，開啟「技術分析」頁籤即可看到 K 線資料`);

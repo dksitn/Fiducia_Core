@@ -287,7 +287,7 @@ export default function FHCIndustryPage() {
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                           <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
                           <YAxis tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}億`} width={55} />
-                          <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} formatter={(v: any, name: any) => [`${Number(v).toFixed(2)} 億`, name]} />
+                          <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} formatter={(v: any, name: string) => [`${Number(v).toFixed(2)} 億`, name]} />
                           <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
                           <Bar dataKey="revenue" name="營業收入(億)" fill="#E2E8F0" radius={[4, 4, 0, 0]} barSize={20} />
                           <Line dataKey="net_income" name="稅後淨利(億)" stroke="#10B981" strokeWidth={3} dot={{ r: 4, fill: '#10B981', stroke: '#fff', strokeWidth: 2 }} />
@@ -332,79 +332,142 @@ export default function FHCIndustryPage() {
             </div>
           )}
 
-          {/* ── ESG 投融資排放 ── */}
+          {/* ── ESG 上市公司碳排比較 ── */}
           {activeTab === 'ESG' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
-                <h3 className="text-sm font-bold text-slate-500 border-b border-slate-100 pb-2">投融資碳排（Financed Emissions）</h3>
-                <div>
+            <div className="space-y-6">
+              {/* 頂部說明 + 當前金控碳排 KPI */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                   <p className="text-xs font-bold text-slate-400 mb-1">範疇一排放</p>
-                  <p className="text-2xl font-black text-amber-600">{latestEsg?.scope1_tco2e != null ? `${latestEsg.scope1_tco2e.toLocaleString()} tCO₂e` : 'N/A'}</p>
+                  <p className="text-2xl font-black text-amber-600">{latestEsg?.scope1_tco2e != null ? `${latestEsg.scope1_tco2e.toLocaleString()}` : 'N/A'}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">tCO₂e · {latestEsg?.period ?? '—'}</p>
                 </div>
-                <div>
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                   <p className="text-xs font-bold text-slate-400 mb-1">範疇二排放</p>
-                  <p className="text-2xl font-black text-blue-600">{latestEsg?.scope2_tco2e != null ? `${latestEsg.scope2_tco2e.toLocaleString()} tCO₂e` : 'N/A'}</p>
+                  <p className="text-2xl font-black text-blue-600">{latestEsg?.scope2_tco2e != null ? `${latestEsg.scope2_tco2e.toLocaleString()}` : 'N/A'}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">tCO₂e · {latestEsg?.period ?? '—'}</p>
                 </div>
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                  <p className="text-xs font-bold text-slate-400 mb-1">合計排放量</p>
-                  <p className="text-xl font-black text-slate-800">
-                    {latestEsg ? `${((latestEsg.scope1_tco2e ?? 0) + (latestEsg.scope2_tco2e ?? 0)).toLocaleString()} tCO₂e` : 'N/A'}
-                  </p>
-                  <p className="text-[9px] text-slate-400 mt-1 font-mono">方法學: PCAF (Global) · esg_metrics</p>
-                </div>
-                <div>
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                   <p className="text-xs font-bold text-slate-400 mb-1">確信等級</p>
-                  <p className={`text-xl font-black ${latestEsg?.assurance_level === 'High' ? 'text-emerald-600' : latestEsg?.assurance_level === 'Medium' ? 'text-amber-600' : 'text-slate-400'}`}>
+                  <p className={`text-2xl font-black ${latestEsg?.assurance_level === 'High' ? 'text-emerald-600' : 'text-amber-600'}`}>
                     {latestEsg?.assurance_level ?? 'N/A'}
                   </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">第三方確信</p>
                 </div>
-                <button className="w-full py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow hover:bg-indigo-700 mt-auto">
-                  產出監理輸出包 (Disclosure Pack)
-                </button>
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                  <p className="text-xs font-bold text-slate-400 mb-1">系統覆蓋公司數</p>
+                  <p className="text-2xl font-black text-indigo-600">{allEsgData.length}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">有效 ESG 記錄</p>
+                </div>
               </div>
-              <div className="lg:col-span-2 space-y-6">
+
+              {/* 跨公司碳排橫向比較 */}
+              {allEsgData.length > 0 ? (
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <div className="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
-                    <h3 className="text-sm font-bold text-slate-800">ESG 資料品質分級分佈</h3>
-                    <span className="text-[9px] text-slate-400 font-mono">橘色 = 缺乏第三方確信</span>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">各上市公司碳排比較（範疇一 + 範疇二）</h3>
+                      <p className="text-[10px] text-indigo-600 font-bold mt-1">依合計排放量由高至低排序 · 各公司最新年度資料</p>
+                    </div>
+                    <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">esg_metrics (VALID)</span>
                   </div>
-                  <div style={{ height: 180 }}>
+                  <div style={{ height: Math.max(220, allEsgData.length * 42) }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={ESG_DQ_DIST} layout="vertical" margin={{ top: 0, right: 30, left: 40, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal vertical={false} stroke="#E2E8F0" />
-                        <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
-                        <YAxis dataKey="grade" type="category" tick={{ fontSize: 10, fill: '#334155', fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }} cursor={{ fill: '#F8FAFC' }} formatter={(v: any) => [`${v}%`, '佔比']} />
-                        <Bar dataKey="pct" name="佔比" radius={[0, 4, 4, 0]} barSize={28}>
-                          {ESG_DQ_DIST.map((e, i) => <Cell key={i} fill={e.grade.includes('C') ? '#F59E0B' : '#10B981'} />)}
-                        </Bar>
+                      <BarChart data={allEsgData} layout="vertical" margin={{ top: 0, right: 80, left: 60, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+                        <XAxis type="number" tick={{ fontSize: 9, fill: '#64748B' }} axisLine={false} tickLine={false}
+                          tickFormatter={v => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v/1_000).toFixed(0)}K` : String(v)} />
+                        <YAxis dataKey="company_code" type="category" tick={{ fontSize: 10, fill: '#334155', fontWeight: 'bold' }} axisLine={false} tickLine={false} width={55} />
+                        <RechartsTooltip
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '11px' }}
+                          formatter={(v: any, name: string) => [`${Number(v).toLocaleString()} tCO₂e`, name]}
+                          labelFormatter={label => `${label} · ${allEsgData.find(d => d.company_code === label)?.period ?? ''}`}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} />
+                        <Bar dataKey="scope1" name="範疇一" stackId="a" fill="#F59E0B" radius={[0,0,0,0]} barSize={20} />
+                        <Bar dataKey="scope2" name="範疇二" stackId="a" fill="#3B82F6" radius={[0,4,4,0]} barSize={20} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
-                {esgData.length > 0 && (
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">碳排多年趨勢</h3>
-                    <div style={{ height: 160 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart
-                          data={[...esgData].reverse().map(r => ({ period: String(r.period), scope1: r.scope1_tco2e ?? 0, scope2: r.scope2_tco2e ?? 0 }))}
-                          margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                          <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fontSize: 9, fill: '#64748B' }} axisLine={false} tickLine={false} width={55}
-                            tickFormatter={v => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : `${(v/1_000).toFixed(0)}K`} />
-                          <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '11px' }} />
-                          <Legend wrapperStyle={{ fontSize: '10px' }} />
-                          <Line dataKey="scope1" name="範疇一" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} />
-                          <Line dataKey="scope2" name="範疇二" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </div>
+              ) : (
+                <div className="bg-white p-12 rounded-2xl border-2 border-dashed border-slate-200 text-center">
+                  <p className="text-sm font-bold text-slate-500">尚無 ESG 碳排資料</p>
+                  <p className="text-xs text-slate-400 mt-1">請至 Admin → 第二層 → 永續碳排報告同步</p>
+                </div>
+              )}
+
+              {/* 各公司確信等級 + DQ 分數明細表 */}
+              {allEsgData.length > 0 && (
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+                    <h3 className="text-sm font-bold text-slate-800">ESG 資料品質明細</h3>
+                    <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">esg_metrics</span>
                   </div>
-                )}
-              </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 text-slate-500 font-bold">
+                        <tr>
+                          <th className="px-3 py-2 rounded-l-lg">公司代號</th>
+                          <th className="px-3 py-2">報告年度</th>
+                          <th className="px-3 py-2">範疇一 (tCO₂e)</th>
+                          <th className="px-3 py-2">範疇二 (tCO₂e)</th>
+                          <th className="px-3 py-2">合計</th>
+                          <th className="px-3 py-2">確信等級</th>
+                          <th className="px-3 py-2 rounded-r-lg">DQ 分數</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allEsgData.map((row, i) => (
+                          <tr key={i} className={`border-b border-slate-50 hover:bg-slate-50/50 ${row.company_code === selectedCompany ? 'bg-indigo-50/50' : ''}`}>
+                            <td className="px-3 py-2.5 font-black text-indigo-600">{row.company_code}</td>
+                            <td className="px-3 py-2.5 font-mono text-slate-500">{row.period}</td>
+                            <td className="px-3 py-2.5 font-bold text-amber-600">{row.scope1.toLocaleString()}</td>
+                            <td className="px-3 py-2.5 font-bold text-blue-600">{row.scope2.toLocaleString()}</td>
+                            <td className="px-3 py-2.5 font-black text-slate-700">{row.total.toLocaleString()}</td>
+                            <td className="px-3 py-2.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${row.assurance === 'High' ? 'bg-emerald-50 text-emerald-700' : row.assurance === 'Medium' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                                {row.assurance}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className={`font-black ${row.dq_score >= 80 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.dq_score}</span>
+                              <span className="text-slate-400"> / 100</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 當前金控多年碳排趨勢 */}
+              {esgData.length > 1 && (
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+                    <h3 className="text-sm font-bold text-slate-800">本金控碳排多年趨勢</h3>
+                    <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded font-mono">{selectedCompany} · {esgData.length} 年</span>
+                  </div>
+                  <div style={{ height: 160 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={[...esgData].reverse().map(r => ({ period: String(r.period), scope1: r.scope1_tco2e ?? 0, scope2: r.scope2_tco2e ?? 0 }))}
+                        margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                        <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: '#64748B' }} axisLine={false} tickLine={false} width={55}
+                          tickFormatter={v => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : `${(v/1_000).toFixed(0)}K`} />
+                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '11px' }} />
+                        <Legend wrapperStyle={{ fontSize: '10px' }} />
+                        <Line dataKey="scope1" name="範疇一" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line dataKey="scope2" name="範疇二" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
