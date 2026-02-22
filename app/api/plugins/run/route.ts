@@ -779,7 +779,21 @@ export async function POST(request: Request) {
         company_code: companyId,
         period,
         dq_score: dqScore,
-        sealed_by: userId
+        sealed_by: userId,
+        // ✅ 把財務數字一起放入 auditReport，供 PDF 正確讀取
+        business_data: {
+          company_code: companyId,
+          period,
+          metrics: {
+            revenue:             dbRecord.revenue,
+            net_income:          dbRecord.net_income,
+            total_assets:        dbRecord.total_assets,
+            total_liabilities:   dbRecord.total_liabilities,
+            equity:              dbRecord.equity,
+            operating_cash_flow: dbRecord.operating_cash_flow,
+            capital_expenditure: dbRecord.capital_expenditure,
+          }
+        }
       };
       version_hash = `fin-seal-${companyId}-${period}-${Date.now()}`;
       summary = `[L3 封存] ${companyId} ${period} 財務報表數位簽章封存`;
@@ -812,7 +826,17 @@ export async function POST(request: Request) {
         company_code: orgId,
         period,
         dq_score: dqScore,
-        sealed_by: userId
+        sealed_by: userId,
+        business_data: {
+          company_code: orgId,
+          period,
+          metrics: {
+            scope1_emissions: dbRecord.scope1_emissions,
+            scope2_emissions: dbRecord.scope2_emissions,
+            assurance_level:  dbRecord.assurance_level,
+            reporting_year:   dbRecord.reporting_year,
+          }
+        }
       };
       version_hash = `esg-seal-${orgId}-${period}-${Date.now()}`;
       summary = `[L3 封存] ${orgId} ${period} ESG 永續指標數位簽章封存`;

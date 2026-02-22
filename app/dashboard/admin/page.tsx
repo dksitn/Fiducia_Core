@@ -150,11 +150,42 @@ export default function AdminPage() {
       const text = await data.text();
       const jsonData = JSON.parse(text);
       let exportData: any[] = [];
-      if (jsonData.findings && Array.isArray(jsonData.findings)) {
-        exportData = jsonData.findings.map((f: any) => {
-          const raw = f.raw_data || {};
-          return { '識別碼': f.id || raw.company_code, '同步狀態': f.status, 'DQ品質分數': f.dq_score || 'N/A', '系統判定異常': f.issues || 'PASS', ...raw };
-        });
+      const plugin = jsonData.source_plugin ?? '';
+      if (plugin === 'P_FIN_REPORT_VERSION_SEAL') {
+        const m = jsonData.business_data?.metrics ?? {};
+        exportData = [{
+          '公司代號': jsonData.company_code ?? jsonData.business_data?.company_code,
+          '財報期間': jsonData.period ?? jsonData.business_data?.period,
+          'DQ品質分數': jsonData.dq_score,
+          '封存狀態': jsonData.status,
+          '封存時間': jsonData._sealed_at ?? jsonData.executed_at,
+          '營業收入(千元)': m.revenue,
+          '稅後淨利(千元)': m.net_income,
+          '資產總計(千元)': m.total_assets,
+          '負債總計(千元)': m.total_liabilities,
+          '股東權益(千元)': m.equity,
+          '營業現金流(千元)': m.operating_cash_flow,
+          '資本支出(千元)': m.capital_expenditure,
+        }];
+      } else if (plugin === 'P_ESG_REPORT_VERSION_SEAL') {
+        const m = jsonData.business_data?.metrics ?? {};
+        exportData = [{
+          '公司代號': jsonData.company_code,
+          '報告期間': jsonData.period,
+          'DQ品質分數': jsonData.dq_score,
+          '範疇一排放(tCO₂e)': m.scope1_emissions,
+          '範疇二排放(tCO₂e)': m.scope2_emissions,
+          '確信等級': m.assurance_level,
+        }];
+      } else if (jsonData.findings && Array.isArray(jsonData.findings)) {
+        exportData = jsonData.findings.map((f: any) => ({
+          '識別碼': f.id,
+          '同步狀態': f.status,
+          'DQ品質分數': f.dq_score ?? 'N/A',
+          '期間': f.period ?? '',
+          '營收(千元)': f.revenue ?? '',
+          '資料來源': jsonData.data_source ?? '',
+        }));
       } else {
         exportData = [{ '原始資料': JSON.stringify(jsonData) }];
       }
@@ -210,16 +241,30 @@ export default function AdminPage() {
   const handlePreparePdf = async (storagePath: string, evidenceId: string) => {
     setIsFetchingPdfData(evidenceId);
     try {
+      // 取 storage 的 auditReport JSON
       const { data, error } = await supabase.storage.from('governance').download(storagePath);
       if (error) throw error;
       const text = await data.text();
       let parsedData = JSON.parse(text);
-      if (parsedData.source_plugin === 'TW_FUNDAMENTAL_SYNC' || parsedData.source_plugin === 'TW_FINANCIAL_SYNC') {
-        const { data: finData } = await supabase.from('fin_financial_fact').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle();
-        if (finData) {
-          parsedData.business_data = { company_code: finData.company_code, period: finData.period, metrics: { revenue: finData.revenue, netIncome: finData.net_income } };
-        }
+
+      // 取對應的 evidence 記錄（取得 fingerprint 和 version_hash）
+      const { data: evidenceRow } = await supabase
+        .from('sys_evidence_items')
+        .select('fingerprint, sys_state_versions(version_hash)')
+        .eq('id', evidenceId)
+        .maybeSingle();
+
+      // ✅ 把 fingerprint 和 version_hash 注入到 parsedData，供 PDF 讀取
+      if (evidenceRow) {
+        parsedData._fingerprint = evidenceRow.fingerprint;
+        parsedData._version_hash = (evidenceRow as any).sys_state_versions?.version_hash;
       }
+
+      // 同步類報告（TW_FUNDAMENTAL_SYNC）補充財報數字
+      if (parsedData.source_plugin === 'TW_FUNDAMENTAL_SYNC' || parsedData.source_plugin === 'TW_MONTHLY_REVENUE_SYNC') {
+        // 同步報告本身就有 findings，不需要額外補充
+      }
+
       setPdfReportData(parsedData);
     } catch (err: any) {
       alert('❌ 擷取報告資料失敗：' + err.message);

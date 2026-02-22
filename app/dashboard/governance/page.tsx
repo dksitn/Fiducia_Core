@@ -130,22 +130,34 @@ export default function GovernanceDashboardPage() {
     setIsSealingAll(true);
     setBatchProgress({ current: 0, total: validTasks.length, currentTask: '準備中...' });
     let successCount = 0;
+    let skipCount = 0;
     try {
       for (const task of validTasks) {
         setBatchProgress({
-          current: successCount,
+          current: successCount + skipCount,
           total: validTasks.length,
           currentTask: `${task.company} | ${task.period} ${task.type}`
         });
-        await runApprove(task);
-        successCount++;
+        try {
+          await runApprove(task);
+          successCount++;
+        } catch (taskErr: any) {
+          const msg: string = taskErr.message ?? '';
+          // 已封存/已放行 → 略過，不中斷整批
+          if (msg.includes('已封存') || msg.includes('VALID') || msg.includes('禁止重複')) {
+            skipCount++;
+          } else {
+            throw taskErr; // 真正錯誤才往上拋
+          }
+        }
         setBatchProgress({
-          current: successCount,
+          current: successCount + skipCount,
           total: validTasks.length,
-          currentTask: successCount === validTasks.length ? '完成！' : `${task.company} | ${task.period} ✅`
+          currentTask: `${task.company} | ${task.period} ✅`
         });
       }
       await fetchPendingTasks();
+      if (skipCount > 0) alert(`✅ 批次完成！成功 ${successCount} 筆，略過已封存 ${skipCount} 筆。`);
     } catch (err: any) {
       alert(`❌ 批次中斷。已成功 ${successCount} 筆，錯誤：${err.message}`);
       await fetchPendingTasks();
